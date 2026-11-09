@@ -215,7 +215,7 @@ function PluginDialog(props: {
             value={name()}
             onInput={setName}
             label={ctx.t("plugins.package")}
-            placeholder="opencode-foo или C:\path\to\plugin"
+            placeholder="opencode-foo or C:\path\to\plugin"
             autofocus={!props.entry}
           />
           <span class="oem-hint">{ctx.t("plugins.packageHint")}</span>

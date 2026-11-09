@@ -119,7 +119,7 @@ export default Plugin.define({
 
       if (registryResult.error) {
         result.marketplaceError = registryResult.error
-        result.diagnostics.push({ scope: "global", message: `Реестр маркетплейсов: ${registryResult.error}` })
+        result.diagnostics.push({ scope: "global", message: `Marketplace registry: ${registryResult.error}` })
       }
 
       await collect(globalPaths, globalDocument, "global", result)

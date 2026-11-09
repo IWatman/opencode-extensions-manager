@@ -365,10 +365,10 @@ async function fetchJson<T>(url: string): Promise<T> {
   if (!result.ok) {
     if (result.status === 403 || result.status === 429) {
       throw new Error(
-        `GitHub API rate limit or access error (${result.status}). Повторите позже или добавьте маркетплейс локально. ${url}`,
+        `GitHub API rate limit or access error (${result.status}). Try again later or add the marketplace locally. ${url}`,
       )
     }
-    throw new Error(`Не удалось загрузить ${url}: ${result.error ?? result.status}`)
+    throw new Error(`Failed to load ${url}: ${result.error ?? result.status}`)
   }
   return JSON.parse(result.text ?? "null") as T
 }
@@ -460,10 +460,10 @@ async function readGithubManifest(
       const result = await fetchText(candidate)
       if (!result.ok) {
         if (result.status === 0) {
-          throw new Error(`Не удалось подключиться к GitHub: ${result.error ?? "network error"}`)
+          throw new Error(`Failed to connect to GitHub: ${result.error ?? "network error"}`)
         }
         if (result.status === 404) continue
-        throw new Error(`Не удалось загрузить маркетплейс ${candidate}: ${result.error ?? result.status}`)
+        throw new Error(`Failed to load marketplace ${candidate}: ${result.error ?? result.status}`)
       }
       try {
         return { ref, manifest: JSON.parse(result.text ?? "null") as MarketplaceManifest }
@@ -491,12 +491,12 @@ export async function loadMarketplace(record: MarketplaceRecord, force = false):
   let finalLocation: Location = location
   if (location.kind === "local") {
     manifest = await readLocalManifest(location)
-    if (!manifest) throw new NotAMarketplaceError(`В папке нет .claude-plugin/marketplace.json: ${location.localPath}`)
+    if (!manifest) throw new NotAMarketplaceError(`No .claude-plugin/marketplace.json in the folder: ${location.localPath}`)
   } else {
     const loaded = await readGithubManifest(location, record.ref)
     if (!loaded) {
       throw new NotAMarketplaceError(
-        `Это не маркетплейс: в ${record.url} нет .claude-plugin/marketplace.json`,
+        `Not a marketplace: ${record.url} has no .claude-plugin/marketplace.json`,
       )
     }
     manifest = loaded.manifest
@@ -546,7 +546,7 @@ export async function listMarketplaces(force = false): Promise<MarketplaceInfo[]
 export async function getCatalog(marketplaceIDValue: string, force = false): Promise<MarketplacePlugin[]> {
   const { registry } = await readRegistry()
   const record = findMarketplace(registry, marketplaceIDValue)
-  if (!record) throw new Error(`Маркетплейс не найден: ${marketplaceIDValue}`)
+  if (!record) throw new Error(`Marketplace not found: ${marketplaceIDValue}`)
   const loaded = await loadMarketplace(record, force)
   const installed = new Set(registry.installed.map((item) => `${item.marketplace}/${item.plugin}`))
   return (loaded.manifest.plugins ?? []).flatMap((entry) => {
@@ -598,7 +598,7 @@ function pluginLocation(entry: MarketplacePluginRaw, marketplace: LoadedMarketpl
       if (root.kind === "local") {
         const resolved = path.resolve(root.localPath, value)
         if (resolved !== root.localPath && !resolved.startsWith(`${root.localPath}${path.sep}`)) {
-          throw new Error("Source плагина выходит за пределы маркетплейса")
+          throw new Error("Plugin source escapes the marketplace root")
         }
         return { kind: "local", localPath: resolved, sourceLabel: resolved }
       }
@@ -670,14 +670,14 @@ async function githubTree(location: PluginLocation, force = false): Promise<Tree
   const owner = location.owner
   const repo = location.repo
   const ref = location.ref
-  if (!owner || !repo || !ref) throw new Error("Не удалось определить GitHub-репозиторий плагина")
+  if (!owner || !repo || !ref) throw new Error("Could not determine the plugin's GitHub repository")
   const key = `${owner}/${repo}@${ref}`
   const cached = treeCache.get(key)
   if (!force && cached && Date.now() - cached.at < treeCacheTTL) return cached.value
   const data = await fetchJson<{ tree?: TreeEntry[]; truncated?: boolean; message?: string }>(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
   )
-  if (!Array.isArray(data.tree)) throw new Error(data.message ?? `Не удалось получить дерево ${owner}/${repo}`)
+  if (!Array.isArray(data.tree)) throw new Error(data.message ?? `Failed to fetch the tree for ${owner}/${repo}`)
   const value = data.tree.filter((entry) => entry.type === "blob" || entry.type === "tree")
   treeCache.set(key, { at: Date.now(), value })
   return value
@@ -791,7 +791,7 @@ async function fetchGithubPluginFiles(
 async function pluginFiles(location: PluginLocation, force = false, entry?: MarketplacePluginRaw): Promise<PluginFiles> {
   if (location.kind === "local") {
     if (!location.localPath || !(await isDirectory(location.localPath))) {
-      throw new Error(`Папка плагина не найдена: ${location.localPath ?? ""}`)
+      throw new Error(`Plugin folder not found: ${location.localPath ?? ""}`)
     }
     return readLocalPluginFiles(location, location.localPath)
   }
@@ -969,7 +969,7 @@ function extractSkills(
         name: id,
         description: firstDescription(body, id),
         content,
-        reason: `Нет корректного YAML frontmatter: ${file}`,
+        reason: `No valid YAML frontmatter: ${file}`,
       })
     }
   }
@@ -1040,7 +1040,7 @@ function detectOpencodePlugin(files: PluginFiles, location: PluginLocation): str
   if (!looksLikePlugin) return
   if (location.kind === "local" && location.localPath) return location.localPath
   if (!location.owner || !location.repo) return
-  if (location.subpath) return ["OpenCode-плагин в подпапке не устанавливается автоматически; укажите локальный путь."]
+  if (location.subpath) return ["An OpenCode plugin in a subfolder is not installed automatically; use a local path."]
   return `github:${location.owner}/${location.repo}`
 }
 
@@ -1059,7 +1059,7 @@ function extract(entry: MarketplacePluginRaw, files: PluginFiles): Extracted {
       warnings.push(`MCP ${server.name}: ${message(error)}`)
     }
   }
-  if (mcpFile !== undefined && !isRecord(mcpFile)) warnings.push(".mcp.json не является JSON-объектом")
+  if (mcpFile !== undefined && !isRecord(mcpFile)) warnings.push(".mcp.json is not a JSON object")
 
   const { skills, adaptable, warnings: skillWarnings } = extractSkills(files, entry)
   warnings.push(...skillWarnings)
@@ -1099,7 +1099,7 @@ function findEntry(loaded: LoadedMarketplace, name: string) {
 async function inspect(record: MarketplaceRecord, pluginName: string, force = false) {
   const loaded = await loadMarketplace(record, force)
   const entry = findEntry(loaded, pluginName)
-  if (!entry) throw new Error(`Плагин не найден в маркетплейсе: ${pluginName}`)
+  if (!entry) throw new Error(`Plugin not found in marketplace: ${pluginName}`)
   const location = pluginLocation(entry, loaded)
   const files = await pluginFiles(location, force, entry)
   const extracted = extract(entry, files)
@@ -1112,7 +1112,7 @@ export async function inspectMarketplacePlugin(
 ): Promise<PluginInspection> {
   const { registry } = await readRegistry()
   const record = findMarketplace(registry, marketplaceIDValue)
-  if (!record) throw new Error(`Маркетплейс не найден: ${marketplaceIDValue}`)
+  if (!record) throw new Error(`Marketplace not found: ${marketplaceIDValue}`)
   const { loaded, entry, location, extracted } = await inspect(record, pluginName)
   return {
     marketplace: record.id,
@@ -1169,7 +1169,7 @@ function uniqueName(base: string, taken: Set<string>) {
     const candidate = `${base}-${index}`
     if (!taken.has(candidate)) return candidate
   }
-  throw new Error(`Не удалось подобрать уникальное имя для ${base}`)
+  throw new Error(`Could not find a unique name for ${base}`)
 }
 
 async function currentNames(paths: ScopePaths) {
@@ -1260,7 +1260,7 @@ export async function installMarketplacePlugin(input: {
 }): Promise<void> {
   const { registry } = await readRegistry()
   const record = findMarketplace(registry, input.marketplace)
-  if (!record) throw new Error(`Маркетплейс не найден: ${input.marketplace}`)
+  if (!record) throw new Error(`Marketplace not found: ${input.marketplace}`)
   const { loaded, entry, location, extracted } = await inspect(record, input.plugin, input.update === true)
   const previous = registry.installed.find((item) => item.key === `${record.id}/${entry.name}`)
   const adapt = input.adapt ?? previous?.adapt ?? false
@@ -1274,8 +1274,8 @@ export async function installMarketplacePlugin(input: {
   const extractedSkills = [...skills.values()]
   if (extracted.mcp.length === 0 && extractedSkills.length === 0 && extracted.plugins.length === 0) {
     throw new Error(
-      "Плагин не содержит частей, совместимых с OpenCode (MCP-серверы, навыки или OpenCode-плагины). " +
-        "Команды, агенты, хуки и LSP из Claude Code не поддерживаются.",
+      "The plugin has no parts compatible with OpenCode (MCP servers, skills, or OpenCode plugins). " +
+        "Claude Code commands, agents, hooks, and LSP are not supported.",
     )
   }
 
@@ -1322,7 +1322,7 @@ export async function installMarketplacePlugin(input: {
 export async function uninstallMarketplacePlugin(key: string): Promise<void> {
   const { registry } = await readRegistry()
   const record = registry.installed.find((item) => item.key === key)
-  if (!record) throw new Error(`Установленный плагин не найден: ${key}`)
+  if (!record) throw new Error(`Installed plugin not found: ${key}`)
   try {
     const paths = await resolveScope(record.scope, record.project)
     await removeArtifacts(record, paths)
@@ -1335,7 +1335,7 @@ export async function uninstallMarketplacePlugin(key: string): Promise<void> {
 export async function setMarketplacePluginEnabled(key: string, enabled: boolean): Promise<void> {
   const { registry } = await readRegistry()
   const record = registry.installed.find((item) => item.key === key)
-  if (!record) throw new Error(`Установленный плагин не найден: ${key}`)
+  if (!record) throw new Error(`Installed plugin not found: ${key}`)
   if (record.enabled === enabled) return
   const paths = await resolveScope(record.scope, record.project)
   for (const name of record.mcp) {
@@ -1375,7 +1375,7 @@ export async function setMarketplacePluginEnabled(key: string, enabled: boolean)
 export async function updateMarketplacePlugin(key: string): Promise<void> {
   const { registry } = await readRegistry()
   const record = registry.installed.find((item) => item.key === key)
-  if (!record) throw new Error(`Установленный плагин не найден: ${key}`)
+  if (!record) throw new Error(`Installed plugin not found: ${key}`)
   await installMarketplacePlugin({
     marketplace: record.marketplace,
     plugin: record.plugin,
@@ -1387,7 +1387,7 @@ export async function updateMarketplacePlugin(key: string): Promise<void> {
 
 export async function addMarketplace(url: string): Promise<{ record?: MarketplaceRecord; repository?: RepositoryInspection }> {
   const value = url.trim()
-  if (!value) throw new Error("Ссылка на маркетплейс не должна быть пустой")
+  if (!value) throw new Error("Marketplace URL must not be empty")
   const location = parseLocation(value)
   const id = marketplaceID(value)
   const candidate: MarketplaceRecord = {
@@ -1423,12 +1423,12 @@ export async function addMarketplace(url: string): Promise<{ record?: Marketplac
 export async function removeMarketplace(id: string): Promise<void> {
   const { registry } = await readRegistry()
   const record = findMarketplace(registry, id)
-  if (!record) throw new Error(`Маркетплейс не найден: ${id}`)
-  if (record.builtin) throw new Error("Встроенный маркетплейс нельзя удалить")
+  if (!record) throw new Error(`Marketplace not found: ${id}`)
+  if (record.builtin) throw new Error("The built-in marketplace cannot be removed")
   const installed = registry.installed.filter((item) => item.marketplace === id)
   if (installed.length > 0) {
     throw new Error(
-      `Сначала удалите установленные из него плагины: ${installed.map((item) => item.plugin).join(", ")}`,
+      `Remove the plugins installed from it first: ${installed.map((item) => item.plugin).join(", ")}`,
     )
   }
   marketplaceCache.delete(cacheKey(record))
@@ -1444,7 +1444,7 @@ export async function removeMarketplace(id: string): Promise<void> {
 
 export async function inspectRepository(url: string): Promise<RepositoryInspection> {
   const location = parseGithub(url)
-  if (!location) throw new Error("Поддерживаются ссылки на GitHub-репозитории")
+  if (!location) throw new Error("GitHub repository URLs are supported")
   const refs = [location.ref, "main", "master"].filter(
     (ref, index, list): ref is string => typeof ref === "string" && ref.length > 0 && list.indexOf(ref) === index,
   )
@@ -1459,7 +1459,7 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     const mcpResult = await fetchText(`${base}/.mcp.json`)
     if ([packageResult, readmeResult, mcpResult].every((result) => !result.ok && result.status === 0)) {
       throw new Error(
-        `Не удалось подключиться к GitHub: ${packageResult.error ?? readmeResult.error ?? mcpResult.error ?? "network error"}`,
+        `Failed to connect to GitHub: ${packageResult.error ?? readmeResult.error ?? mcpResult.error ?? "network error"}`
       )
     }
     if (packageResult.ok || readmeResult.ok || mcpResult.ok) {
@@ -1485,13 +1485,13 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
 
   if (isRecord(mcpFile) && isRecord(mcpFile.mcpServers)) {
     for (const server of mcpServersFrom(mcpFile.mcpServers)) {
-      addMcp(server.name, server.config, "Найден .mcp.json в репозитории")
+      addMcp(server.name, server.config, ".mcp.json found in the repository")
     }
   }
 
   const mcpUrl = readme?.match(/https?:\/\/[^\s"'<>)]+\/mcp(?:\?[^\s"'<>)]*)?/i)?.[0]
   if (mcpUrl) {
-    addMcp(location.repo, { type: "remote", url: mcpUrl }, "Найден URL MCP-сервера в README")
+    addMcp(location.repo, { type: "remote", url: mcpUrl }, "MCP server URL found in README")
   }
 
   const packageName = typeof manifest.name === "string" ? manifest.name : undefined
@@ -1502,19 +1502,19 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
   const isPrivate = manifest.private === true
   const hasBin = manifest.bin !== undefined
   if (packageName && !isPrivate && (hasBin || keywords.some((value) => value === "mcp" || value.includes("modelcontextprotocol")))) {
-    addMcp(location.repo, { type: "local", command: ["npx", "-y", packageName] }, `Пакет ${packageName} запускается через npx`)
+    addMcp(location.repo, { type: "local", command: ["npx", "-y", packageName] }, `Package ${packageName} runs through npx`)
   }
   if (
     keywords.some((value) => value === "opencode" || value === "opencode-plugin" || value.startsWith("opencode-")) ||
     (exports !== undefined && ("./rpc" in exports || "./gui-experimental" in exports))
   ) {
-    addPlugin(`github:${location.owner}/${location.repo}`, "Репозиторий похож на плагин OpenCode")
+    addPlugin(`github:${location.owner}/${location.repo}`, "Repository looks like an OpenCode plugin")
   }
 
   if (proposals.length === 0) {
-    notes.push("Не удалось автоматически определить MCP-сервер или плагин OpenCode.")
+    notes.push("Could not detect an MCP server or OpenCode plugin automatically.")
   }
-  notes.push("Команды, агенты и хуки Claude Code в OpenCode не переносятся.")
+  notes.push("Claude Code commands, agents, and hooks are not carried over to OpenCode.")
 
   return {
     url: `https://github.com/${location.owner}/${location.repo}`,
@@ -1530,15 +1530,15 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
 export async function installRepository(proposal: RepositoryProposal, scope: Scope, project?: string) {
   const paths = await resolveScope(scope, project)
   if (proposal.kind === "mcp") {
-    if (!proposal.name || !proposal.config) throw new Error("Не указан MCP-сервер для установки")
+    if (!proposal.name || !proposal.config) throw new Error("No MCP server specified for installation")
     const document = await readScope(paths)
     if (Object.hasOwn(isRecord(document.data.mcp) && isRecord(document.data.mcp.servers) ? document.data.mcp.servers : {}, proposal.name)) {
-      throw new Error(`MCP-сервер «${proposal.name}» уже существует; переименуйте его вручную.`)
+      throw new Error(`MCP server "${proposal.name}" already exists; rename it manually.`)
     }
     await saveMcp(paths, { name: proposal.name, config: proposal.config })
     return
   }
-  if (!proposal.package) throw new Error("Не указан плагин для установки")
+  if (!proposal.package) throw new Error("No plugin specified for installation")
   const document = await readScope(paths)
   if (!hasPlugin(document, proposal.package)) await savePlugin(paths, { package: proposal.package })
 }
