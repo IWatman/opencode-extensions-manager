@@ -1,6 +1,6 @@
 # OpenCode Extensions Manager
 
-[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh.md) | **Español** | [Français](README.fr.md) | [Deutsch](README.de.md) | [日本語](README.ja.md)
+[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh.md) | **Español** | [Français](README.fr.md) | [Deutsch](README.de.md) | [日本語](README.ja.md) | 繁體中文 | 한국어 | Italiano | Polski | Türkçe | Українська
 
 Plugin GUI de escritorio para **OpenCode** que añade una página **Ajustes → Gestor de extensiones** para gestionar servidores MCP, plugins, skills y mercados de plugins sin editar `opencode.json` a mano.
 
@@ -41,8 +41,9 @@ Plugin GUI de escritorio para **OpenCode** que añade una página **Ajustes → 
   - Copia `.bak` antes de cada cambio.
   - Un JSONC no válido bloquea la escritura en lugar de corromper el archivo.
 - **Localización**
-  - Interfaz en inglés, ruso, chino simplificado, español, francés, alemán y japonés.
+  - Interfaz en inglés, ruso, chino simplificado y tradicional, español, francés, alemán, japonés, coreano, italiano, polaco, turco y ucraniano.
   - Otros idiomas usan inglés como fallback.
+  - Hay README traducidos para los idiomas enlazados; los idiomas de interfaz adicionales aún no están traducidos.
 - **Correcciones de compatibilidad automáticas**
   - Elimina parámetros `?client=claude-…` específicos de Claude de las URL MCP remotas.
   - Ignora documentos como `README.md` al buscar skills.

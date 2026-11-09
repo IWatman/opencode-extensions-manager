@@ -1,6 +1,6 @@
 # OpenCode Extensions Manager
 
-[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md) | **Deutsch** | [日本語](README.ja.md)
+[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md) | **Deutsch** | [日本語](README.ja.md) | 繁體中文 | 한국어 | Italiano | Polski | Türkçe | Українська
 
 Ein Desktop-GUI-Plugin für **OpenCode**, das eine Seite **Einstellungen → Erweiterungsmanager** hinzufügt. Damit lassen sich MCP-Server, Plugins, Skills und Plugin-Marktplätze verwalten, ohne `opencode.json` von Hand zu bearbeiten.
 
@@ -41,8 +41,9 @@ Ein Desktop-GUI-Plugin für **OpenCode**, das eine Seite **Einstellungen → Erw
   - `.bak`-Sicherung vor jeder Änderung.
   - Ungültiges JSONC blockiert Schreibvorgänge, statt die Datei zu beschädigen.
 - **Lokalisierung**
-  - Oberfläche auf Englisch, Russisch, vereinfachtem Chinesisch, Spanisch, Französisch, Deutsch und Japanisch.
+  - Oberfläche auf Englisch, Russisch, vereinfachtem und traditionellem Chinesisch, Spanisch, Französisch, Deutsch, Japanisch, Koreanisch, Italienisch, Polnisch, Türkisch und Ukrainisch.
   - Andere Sprachen verwenden Englisch als Fallback.
+  - Übersetzte READMEs gibt es für die verlinkten Sprachen; die zusätzlichen UI-Sprachen sind noch nicht übersetzt.
 - **Automatische Kompatibilitätskorrekturen**
   - Entfernt Claude-spezifische `?client=claude-…`-Parameter aus entfernten MCP-URLs.
   - Ignoriert Dokumente wie `README.md` beim Scannen von Skills.

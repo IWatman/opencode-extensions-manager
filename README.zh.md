@@ -1,6 +1,6 @@
 # OpenCode 扩展管理器
 
-[English](README.md) | [Русский](README.ru.md) | **简体中文** | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [日本語](README.ja.md)
+[English](README.md) | [Русский](README.ru.md) | **简体中文** | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [日本語](README.ja.md) | 繁體中文 | 한국어 | Italiano | Polski | Türkçe | Українська
 
 一个 **OpenCode** 桌面 GUI 插件。它在 **设置 → 扩展管理器** 中新增页面，用来管理 MCP 服务器、插件、技能和插件市场，无需手动编辑 `opencode.json`。
 
@@ -41,8 +41,9 @@
   - 每次更改前创建 `.bak` 备份。
   - JSONC 无效时阻止写入，避免损坏文件。
 - **本地化**
-  - 英语、俄语、简体中文、西班牙语、法语、德语和日语界面。
+  - 英语、俄语、简体中文、繁体中文、西班牙语、法语、德语、日语、韩语、意大利语、波兰语、土耳其语和乌克兰语界面。
   - 其他语言回退到英语。
+  - 已为上方链接的语言提供 README 翻译；其他界面语言尚未翻译。
 - **自动兼容修复**
   - 从远程 MCP URL 中移除 Claude 专用的 `?client=claude-…` 参数。
   - 扫描技能时忽略 `README.md` 等文档。
