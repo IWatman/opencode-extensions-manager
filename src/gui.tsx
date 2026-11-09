@@ -26,6 +26,13 @@ export default Plugin.define({
           description: ctx.t("scope.configFileHint"),
           keywords: "config opencode.json opencode.jsonc path mcp plugins skills",
         },
+        {
+          id: "oem-doctor",
+          title: ctx.t("doctor.title"),
+          description: ctx.t("doctor.description"),
+          keywords:
+            "doctor diagnostics warnings errors duplicates mcp plugin jsonc parse skills folder failed needs auth",
+        },
       ],
       render: () => <ExtensionsPage ctx={ctx} />,
     }))
