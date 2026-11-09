@@ -2,8 +2,14 @@ import type { Catalog } from "@opencode/plugin/gui"
 import { de } from "./locales/de"
 import { es } from "./locales/es"
 import { fr } from "./locales/fr"
+import { it } from "./locales/it"
 import { ja } from "./locales/ja"
+import { ko } from "./locales/ko"
+import { pl } from "./locales/pl"
+import { tr } from "./locales/tr"
+import { uk } from "./locales/uk"
 import { zh } from "./locales/zh"
+import { zht } from "./locales/zht"
 
 export const catalog: Catalog = {
   en: {
@@ -413,9 +419,15 @@ export const catalog: Catalog = {
     "footer.note":
       "OpenCode следит за этими файлами и перезагружает расширения после изменений. Если плагин продолжает работать по-старому, перезапустите приложение.",
   },
-  zh,
+  de,
   es,
   fr,
-  de,
+  it,
   ja,
+  ko,
+  pl,
+  tr,
+  uk,
+  zh,
+  zht,
 }

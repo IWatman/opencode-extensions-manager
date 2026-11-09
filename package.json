@@ -40,6 +40,8 @@
     "build": "vite build",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "test": "npm run check:i18n",
     "smoke": "node --experimental-strip-types scripts/smoke.ts",
     "smoke:marketplace": "node scripts/run-marketplace-smoke.mjs"
   },

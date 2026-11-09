@@ -1,6 +1,6 @@
 # OpenCode Extensions Manager
 
-[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | **日本語**
+[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | **日本語** | 繁體中文 | 한국어 | Italiano | Polski | Türkçe | Українська
 
 **OpenCode** 用のデスクトップ GUI プラグインです。**設定 → 拡張機能マネージャー** ページを追加し、`opencode.json` を手で編集せずに MCP サーバー、プラグイン、スキル、プラグインマーケットプレイスを管理できます。
 
@@ -41,8 +41,9 @@
   - 変更前に `.bak` バックアップ。
   - 無効な JSONC はファイルを壊さず書き込みをブロック。
 - **ローカライズ**
-  - 英語、ロシア語、簡体字中国語、スペイン語、フランス語、ドイツ語、日本語の UI。
+  - 英語、ロシア語、簡体字中国語、繁体字中国語、スペイン語、フランス語、ドイツ語、日本語、韓国語、イタリア語、ポーランド語、トルコ語、ウクライナ語の UI。
   - その他の言語は英語にフォールバック。
+  - リンクされている言語には翻訳済み README があります。追加の UI 言語はまだ翻訳されていません。
 - **自動互換修正**
   - リモート MCP URL から Claude 固有の `?client=claude-…` パラメータを除去。
   - スキル走査時に `README.md` などのドキュメントを無視。
