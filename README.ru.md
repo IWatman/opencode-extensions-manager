@@ -1,6 +1,6 @@
 # Менеджер расширений OpenCode
 
-**Русский** | [English](README.md)
+**Русский** | [English](README.md) | [简体中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [日本語](README.ja.md)
 
 Плагин для OpenCode Desktop, который добавляет в «Настройки» отдельную страницу **«Менеджер расширений»**. Через неё можно управлять MCP-серверами, плагинами и навыками, не редактируя `opencode.json` вручную.
 

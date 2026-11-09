@@ -1,6 +1,6 @@
 # OpenCode Extensions Manager
 
-**English** | [Русский](README.ru.md)
+**English** | [Русский](README.ru.md) | [简体中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md) | [日本語](README.ja.md)
 
 A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Manager** page for managing MCP servers, plugins, skills, and plugin marketplaces without editing `opencode.json` by hand.
 
