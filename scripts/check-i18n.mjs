@@ -4,14 +4,13 @@
  * and every catalog in src/gui/locales/*.ts.
  *
  * Checks:
- *  - every locale has every English key that is not marked as an English-only fallback;
+ *  - every locale has every English key;
  *  - no duplicate keys;
  *  - every {{placeholder}} set matches English for each key;
  *  - src/gui/i18n.ts imports and registers every locale file;
  *  - only the ru and uk catalogs contain Cyrillic text.
  *
- * Keys in the English-only fallback prefixes below may be missing from a locale: the runtime falls
- * back to English for them until they are translated. Missing keys elsewhere remain errors.
+ * Missing keys are always errors; the runtime English fallback is only a safety net.
  *
  * The catalogs are parsed as plain object literals so the script does not
  * depend on TypeScript compilation or on a specific Node.js version.
@@ -145,13 +144,6 @@ try {
 const englishKeys = [...english.entries.keys()]
 const englishKeySet = new Set(englishKeys)
 
-/**
- * New sections can ship English copy first; every other locale falls back to English at runtime.
- * Keep this list narrow so a forgotten translation in an already translated section still fails.
- */
-const fallbackPrefixes = ["claude.", "updates."]
-const isFallbackKey = (key) => fallbackPrefixes.some((prefix) => key.startsWith(prefix))
-
 if (english.duplicates.size > 0) {
   fail(`src/gui/i18n.ts: en: duplicate keys: ${describe([...english.duplicates])}`)
 }
@@ -159,7 +151,7 @@ if (english.duplicates.size > 0) {
 function checkCatalog(label, catalog, { allowCyrillic = false } = {}) {
   const keys = [...catalog.entries.keys()]
   const keySet = new Set(keys)
-  const missing = englishKeys.filter((key) => !keySet.has(key) && !isFallbackKey(key))
+  const missing = englishKeys.filter((key) => !keySet.has(key))
   const extra = keys.filter((key) => !englishKeySet.has(key))
   const duplicates = [...catalog.duplicates]
 
