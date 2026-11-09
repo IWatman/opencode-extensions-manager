@@ -215,7 +215,13 @@ export default Plugin.define({
 
       marketplaces: async (input) => ({ marketplaces: await listMarketplaces(input.refresh === true) }),
 
-      catalog: async (input) => ({ plugins: await getCatalog(input.marketplace, input.refresh === true) }),
+      catalog: async (input) => ({
+        plugins: await getCatalog(
+          input.marketplace,
+          input.refresh === true,
+          input.scope ? { scope: input.scope, ...(input.project ? { project: input.project } : {}) } : undefined,
+        ),
+      }),
 
       addMarketplace: (input) =>
         withWriteLock(async () => {
@@ -247,14 +253,16 @@ export default Plugin.define({
 
       uninstallMarketplacePlugin: (input) =>
         withWriteLock(async () => {
-          await uninstallMarketplacePlugin(input.key)
-          return buildState(input.project)
+          const skipped = await uninstallMarketplacePlugin(input.key)
+          const state = await buildState(input.project)
+          return skipped.length > 0 ? { ...state, skipped } : state
         }),
 
       setMarketplacePluginEnabled: (input) =>
         withWriteLock(async () => {
-          await setMarketplacePluginEnabled(input.key, input.enabled)
-          return buildState(input.project)
+          const skipped = await setMarketplacePluginEnabled(input.key, input.enabled)
+          const state = await buildState(input.project)
+          return skipped.length > 0 ? { ...state, skipped } : state
         }),
 
       updateMarketplacePlugin: (input) =>

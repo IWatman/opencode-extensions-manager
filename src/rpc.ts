@@ -101,6 +101,13 @@ const MarketplacePlugin = Schema.Struct({
 })
 export type MarketplacePlugin = typeof MarketplacePlugin.Type
 
+const ArtifactFingerprints = Schema.Struct({
+  mcp: Schema.Record(Schema.String, Schema.String),
+  skills: Schema.Record(Schema.String, Schema.String),
+  plugins: Schema.Record(Schema.String, Schema.String),
+})
+export type ArtifactFingerprints = typeof ArtifactFingerprints.Type
+
 const InstalledPlugin = Schema.Struct({
   key: Schema.String,
   marketplace: Schema.String,
@@ -119,6 +126,10 @@ const InstalledPlugin = Schema.Struct({
   skills: Schema.Array(Schema.String),
   plugins: Schema.Array(Schema.String),
   unsupported: Schema.Array(Schema.String),
+  /** Content hashes recorded at install time for MCP servers, skills, and plugin entries. */
+  fingerprints: Schema.optionalKey(ArtifactFingerprints),
+  /** Artifacts kept on purpose because they no longer match the recorded fingerprint. */
+  skipped: Schema.optionalKey(Schema.Array(Schema.String)),
   error: Schema.optionalKey(Schema.String),
 })
 export type InstalledPlugin = typeof InstalledPlugin.Type
@@ -188,6 +199,8 @@ export const StateSchema = Schema.Struct({
   marketplaces: Schema.Array(MarketplaceInfo),
   installedPlugins: Schema.Array(InstalledPlugin),
   marketplaceError: Schema.optionalKey(Schema.String),
+  /** Artifacts deliberately left in place by the last uninstall or disable. */
+  skipped: Schema.optionalKey(Schema.Array(Schema.String)),
 })
 export type ManagerState = typeof StateSchema.Type
 
@@ -306,6 +319,9 @@ export const ManagerRpc = Rpc.define({
         Schema.Struct({
           marketplace: Schema.String,
           refresh: Schema.optionalKey(Schema.Boolean),
+          /** Selects which installed record marks a catalog row as installed. */
+          scope: Schema.optionalKey(Scope),
+          project: Schema.optionalKey(Schema.String),
         }),
       ),
       output: portable(
