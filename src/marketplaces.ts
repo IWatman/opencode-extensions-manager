@@ -1,4 +1,6 @@
-import { readFile, readdir } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
@@ -12,6 +14,7 @@ import {
   listSkills,
   mcpServers,
   parseFrontmatter,
+  pluginTarget,
   readScope,
   removePluginPackage,
   removeMcp,
@@ -54,6 +57,16 @@ export interface MarketplaceRecord {
   readonly addedAt: string
 }
 
+/**
+ * Content hashes for every artifact this manager owns. Keys are the installed MCP name, skill id,
+ * or plugin package target. A missing hash means the artifact predates fingerprinting.
+ */
+export interface ArtifactFingerprints {
+  readonly mcp: Readonly<Record<string, string>>
+  readonly skills: Readonly<Record<string, string>>
+  readonly plugins: Readonly<Record<string, string>>
+}
+
 export interface InstalledRecord {
   readonly key: string
   readonly marketplace: string
@@ -73,6 +86,9 @@ export interface InstalledRecord {
   readonly skills: readonly string[]
   readonly plugins: readonly string[]
   readonly unsupported: readonly string[]
+  readonly fingerprints?: ArtifactFingerprints
+  /** Artifacts left in place because the user changed them after installation. */
+  readonly skipped?: readonly string[]
   readonly error?: string
 }
 
@@ -105,6 +121,45 @@ function registryPath() {
   return custom || path.join(globalConfigDir(), "extensions-manager.json")
 }
 
+/** Exposed so a failed install can restore the registry exactly as it was before the attempt. */
+export function registryFilePath() {
+  return registryPath()
+}
+
+function normalizeProjectPath(project: string | undefined) {
+  return path.resolve(expandHome(project?.trim() || process.cwd()))
+}
+
+/**
+ * Installed records are keyed by marketplace, plugin, scope, and (for project installs) the
+ * resolved project directory. Scope in the key lets one plugin be installed globally and in any
+ * number of projects at the same time. The project path is URI-encoded so it cannot introduce key
+ * separators on Windows (`C:\work`) or POSIX (`/home/me/work`).
+ */
+export function installedKey(marketplace: string, plugin: string, scope: Scope, project?: string) {
+  const base = `${marketplace}/${plugin}`
+  if (scope === "global") return `${base}@global`
+  return `${base}@project:${encodeURIComponent(normalizeProjectPath(project))}`
+}
+
+function stringHashMap(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined
+  const result: Record<string, string> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") result[key] = item
+  }
+  return result
+}
+
+function normalizeFingerprints(value: unknown): ArtifactFingerprints | undefined {
+  if (!isRecord(value)) return undefined
+  const mcp = stringHashMap(value.mcp)
+  const skills = stringHashMap(value.skills)
+  const plugins = stringHashMap(value.plugins)
+  if (!mcp && !skills && !plugins) return undefined
+  return { mcp: mcp ?? {}, skills: skills ?? {}, plugins: plugins ?? {} }
+}
+
 function normalizeRegistry(input: unknown): Registry {
   if (!isRecord(input)) return emptyRegistry()
   const marketplaces = Array.isArray(input.marketplaces)
@@ -134,16 +189,24 @@ function normalizeRegistry(input: unknown): Registry {
         ) {
           return []
         }
+        const scope = entry.scope
+        const storedProject = typeof entry.project === "string" ? entry.project : undefined
+        // Resolve the project path once so legacy relative paths match the installed key and the
+        // GUI's comparison with the current project root.
+        const project = scope === "project" && storedProject ? normalizeProjectPath(storedProject) : storedProject
+        const fingerprints = normalizeFingerprints(entry.fingerprints)
         return [
           {
-            key: entry.key,
+            // Legacy keys were `${marketplace}/${plugin}`; recompute every key so old records move
+            // to the scope-aware format exactly once while keeping all of their other fields.
+            key: installedKey(entry.marketplace, entry.plugin, scope, project),
             marketplace: entry.marketplace,
             marketplaceName: typeof entry.marketplaceName === "string" ? entry.marketplaceName : entry.marketplace,
             plugin: entry.plugin,
             ...(typeof entry.displayName === "string" ? { displayName: entry.displayName } : {}),
             ...(typeof entry.description === "string" ? { description: entry.description } : {}),
-            scope: entry.scope,
-            ...(typeof entry.project === "string" ? { project: entry.project } : {}),
+            scope,
+            ...(project ? { project } : {}),
             enabled: entry.enabled !== false,
             ...(entry.adapt === true ? { adapt: true } : {}),
             installedAt: typeof entry.installedAt === "string" ? entry.installedAt : new Date().toISOString(),
@@ -160,12 +223,23 @@ function normalizeRegistry(input: unknown): Registry {
             unsupported: Array.isArray(entry.unsupported)
               ? entry.unsupported.filter((value): value is string => typeof value === "string")
               : [],
+            ...(fingerprints ? { fingerprints } : {}),
+            ...(Array.isArray(entry.skipped)
+              ? { skipped: entry.skipped.filter((value): value is string => typeof value === "string") }
+              : {}),
             ...(typeof entry.error === "string" ? { error: entry.error } : {}),
           } satisfies InstalledRecord,
         ]
       })
     : []
-  return { version: 1, marketplaces, installed }
+  // A registry written by a newer build may contain duplicate keys. Keep the newest record for a
+  // key instead of returning two rows that would make uninstall ambiguous.
+  const unique = new Map<string, InstalledRecord>()
+  for (const record of installed) {
+    unique.delete(record.key)
+    unique.set(record.key, record)
+  }
+  return { version: 1, marketplaces, installed: [...unique.values()] }
 }
 
 export async function readRegistry(): Promise<{ registry: Registry; error?: string }> {
@@ -543,15 +617,30 @@ export async function listMarketplaces(force = false): Promise<MarketplaceInfo[]
   return loaded.sort((left, right) => Number(right.builtin) - Number(left.builtin) || left.name.localeCompare(right.name))
 }
 
-export async function getCatalog(marketplaceIDValue: string, force = false): Promise<MarketplacePlugin[]> {
+export async function getCatalog(
+  marketplaceIDValue: string,
+  force = false,
+  target?: { scope: Scope; project?: string },
+): Promise<MarketplacePlugin[]> {
   const { registry } = await readRegistry()
   const record = findMarketplace(registry, marketplaceIDValue)
   if (!record) throw new Error(`Marketplace not found: ${marketplaceIDValue}`)
   const loaded = await loadMarketplace(record, force)
-  const installed = new Set(registry.installed.map((item) => `${item.marketplace}/${item.plugin}`))
+  const targetProject = target?.scope === "project" ? normalizeProjectPath(target.project) : undefined
   return (loaded.manifest.plugins ?? []).flatMap((entry) => {
     if (typeof entry.name !== "string" || entry.name.length === 0) return []
     const author = authorName(entry.author)
+    const installed = registry.installed.find(
+      (item) =>
+        item.marketplace === record.id &&
+        item.plugin === entry.name &&
+        (!target ||
+          (item.scope === target.scope &&
+            (target.scope === "global" ||
+              (item.project !== undefined &&
+                targetProject !== undefined &&
+                normalizeProjectPath(item.project) === targetProject)))),
+    )
     return [
       {
         marketplace: record.id,
@@ -562,7 +651,7 @@ export async function getCatalog(marketplaceIDValue: string, force = false): Pro
         ...(entry.category ? { category: entry.category } : {}),
         ...(entry.homepage ? { homepage: entry.homepage } : {}),
         ...(entry.version ? { version: entry.version } : {}),
-        ...(installed.has(`${record.id}/${entry.name}`) ? { installedKey: `${record.id}/${entry.name}` } : {}),
+        ...(installed ? { installedKey: installed.key } : {}),
       },
     ]
   })
@@ -1180,16 +1269,296 @@ async function currentNames(paths: ScopePaths) {
   return { document, mcp, plugins, skills }
 }
 
-async function removeArtifacts(record: InstalledRecord, paths: ScopePaths) {
+/* ---------------------------------------------------------------------------------------------- */
+/* Ownership fingerprints                                                                          */
+/* ---------------------------------------------------------------------------------------------- */
+
+interface AppliedArtifacts {
+  readonly mcp: readonly string[]
+  readonly skills: readonly string[]
+  readonly plugins: readonly string[]
+}
+
+/** JSON with sorted object keys, so semantically identical values always hash the same. */
+function stableSerialization(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => stableSerialization(item)).join(",")}]`
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialization(value[key])}`)
+      .join(",")}}`
+  }
+  const serialized = JSON.stringify(value)
+  return serialized === undefined ? "null" : serialized
+}
+
+function hashArtifact(value: unknown) {
+  return createHash("sha256").update(stableSerialization(value)).digest("hex")
+}
+
+/**
+ * `disabled` is toggled by this manager and is not part of the artifact the user can edit, so it
+ * must not invalidate the fingerprint when a plugin is disabled and enabled again.
+ */
+function mcpFingerprintValue(config: unknown) {
+  if (!isRecord(config) || !Object.hasOwn(config, "disabled")) return config
+  const value = { ...config }
+  delete value.disabled
+  return value
+}
+
+async function captureFingerprints(paths: ScopePaths, applied: AppliedArtifacts): Promise<ArtifactFingerprints> {
+  const document = await readScope(paths)
+  const servers = mcpServers(document.data)
+  const skills = await listSkills(paths.skillsDir)
+  const plugins = listPlugins(document.data)
+  const mcp: Record<string, string> = {}
+  const skillHashes: Record<string, string> = {}
+  const pluginHashes: Record<string, string> = {}
+
+  for (const name of applied.mcp) {
+    const config = servers[name]
+    if (config !== undefined) mcp[name] = hashArtifact(mcpFingerprintValue(config))
+  }
+  for (const id of applied.skills) {
+    const skill = skills.find((item) => item.id === id)
+    if (skill) skillHashes[id] = hashArtifact(skill.content)
+  }
+  for (const target of applied.plugins) {
+    // A disabled plugin entry is not written to the config, but re-enabling it restores this value.
+    const raw = plugins.find((entry) => pluginTarget(entry.raw) === target)?.raw ?? target
+    pluginHashes[target] = hashArtifact(raw)
+  }
+  return { mcp, skills: skillHashes, plugins: pluginHashes }
+}
+
+type RemovalMode = "update" | "remove"
+
+async function removePluginArtifacts(
+  paths: ScopePaths,
+  record: InstalledRecord,
+  mode: RemovalMode,
+): Promise<string[]> {
+  const skipped: string[] = []
+  let document
+  try {
+    document = await readScope(paths)
+  } catch (error) {
+    if (mode === "update") throw error
+    return skipped
+  }
+
+  for (const target of record.plugins) {
+    const entries = listPlugins(document.data).filter((entry) => pluginTarget(entry.raw) === target)
+    if (entries.length === 0) continue
+    const expected = record.fingerprints?.plugins?.[target]
+    if (expected === undefined) {
+      // A record written before fingerprints existed cannot prove ownership. Updates replace the
+      // previous version, but uninstall and disable leave the artifact alone and report it.
+      if (mode === "remove") {
+        skipped.push(`Plugin "${target}" (no fingerprint)`)
+        continue
+      }
+      await removePluginPackage(paths, target)
+      continue
+    }
+    const removable = entries.filter((entry) => hashArtifact(entry.raw) === expected)
+    const edited = entries.filter((entry) => hashArtifact(entry.raw) !== expected)
+    if (removable.length > 0) {
+      try {
+        await updateScope(paths, (data) => {
+          if (!Array.isArray(data.plugins)) return []
+          // Remove from the end so earlier indices stay valid while the edits are applied in order.
+          return data.plugins
+            .flatMap((entry, index) =>
+              pluginTarget(entry) === target && hashArtifact(entry) === expected
+                ? [{ path: ["plugins", index], value: undefined } satisfies Mutation]
+                : [],
+            )
+            .reverse()
+        })
+      } catch (error) {
+        if (mode === "update") throw error
+        skipped.push(`Plugin "${target}"`)
+      }
+    }
+    if (edited.length > 0) skipped.push(`Plugin "${target}"`)
+  }
+  return skipped
+}
+
+async function removeArtifacts(
+  record: InstalledRecord,
+  paths: ScopePaths,
+  mode: RemovalMode,
+): Promise<string[]> {
+  const skipped: string[] = []
+  let document
+  try {
+    document = await readScope(paths)
+  } catch (error) {
+    if (mode === "update") throw error
+    document = undefined
+  }
+
+  const servers = document ? mcpServers(document.data) : {}
   for (const name of record.mcp) {
-    await removeMcp(paths, name).catch(() => undefined)
+    const config = servers[name]
+    if (config === undefined) continue
+    const expected = record.fingerprints?.mcp?.[name]
+    if (expected === undefined) {
+      if (mode === "remove") {
+        skipped.push(`MCP server "${name}" (no fingerprint)`)
+        continue
+      }
+      await removeMcp(paths, name)
+      continue
+    }
+    if (hashArtifact(mcpFingerprintValue(config)) !== expected) {
+      skipped.push(`MCP server "${name}"`)
+      continue
+    }
+    try {
+      await removeMcp(paths, name)
+    } catch (error) {
+      if (mode === "update") throw error
+      skipped.push(`MCP server "${name}"`)
+    }
+  }
+
+  let skills: Awaited<ReturnType<typeof listSkills>> = []
+  try {
+    skills = await listSkills(paths.skillsDir)
+  } catch (error) {
+    if (mode === "update") throw error
+    skills = []
   }
   for (const id of record.skills) {
-    await removeSkill(paths, id).catch(() => undefined)
+    const skill = skills.find((item) => item.id === id)
+    if (!skill) continue
+    const expected = record.fingerprints?.skills?.[id]
+    if (expected === undefined) {
+      if (mode === "remove") {
+        skipped.push(`Skill "${id}" (no fingerprint)`)
+        continue
+      }
+      await removeSkill(paths, id)
+      continue
+    }
+    if (hashArtifact(skill.content) !== expected) {
+      skipped.push(`Skill "${id}"`)
+      continue
+    }
+    try {
+      await removeSkill(paths, id)
+    } catch (error) {
+      if (mode === "update") throw error
+      skipped.push(`Skill "${id}"`)
+    }
   }
-  for (const target of record.plugins) {
-    await removePluginPackage(paths, target).catch(() => undefined)
+
+  skipped.push(...(await removePluginArtifacts(paths, record, mode)))
+  return skipped
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Install snapshots                                                                               */
+/* ---------------------------------------------------------------------------------------------- */
+
+interface TextSnapshot {
+  readonly file: string
+  readonly exists: boolean
+  readonly text: string
+}
+
+interface SkillSnapshot {
+  readonly id: string
+  readonly source: string
+  readonly backup: string
+}
+
+interface InstallSnapshot {
+  readonly workspace: string
+  readonly config: TextSnapshot
+  readonly registry: TextSnapshot
+  readonly skills: readonly SkillSnapshot[]
+}
+
+async function snapshotText(file: string): Promise<TextSnapshot> {
+  try {
+    return { file, exists: true, text: await readFile(file, "utf8") }
+  } catch {
+    return { file, exists: false, text: "" }
   }
+}
+
+async function restoreText(snapshot: TextSnapshot) {
+  if (snapshot.exists) await writeAtomic(snapshot.file, snapshot.text, false)
+  else await rm(snapshot.file, { force: true })
+}
+
+async function removeSkillNode(paths: ScopePaths, id: string) {
+  for (const root of [paths.skillsDir, path.join(paths.skillsDir, ".disabled")]) {
+    await rm(path.join(root, id), { recursive: true, force: true })
+    await rm(path.join(root, `${id}.md`), { force: true })
+  }
+}
+
+/**
+ * Captures everything an install can touch: the config file (which holds MCP servers and plugin
+ * entries), the managed skill folders, and the registry. Skill folders are copied to a temporary
+ * workspace because restoring only names would lose their content.
+ */
+async function createInstallSnapshot(paths: ScopePaths, previous?: InstalledRecord): Promise<InstallSnapshot> {
+  const workspace = await mkdtemp(path.join(tmpdir(), "oem-install-"))
+  const skills: SkillSnapshot[] = []
+  try {
+    if (previous) {
+      const current = await listSkills(paths.skillsDir)
+      for (const id of previous.skills) {
+        const skill = current.find((item) => item.id === id)
+        if (!skill) continue
+        const backup = path.join(workspace, `skill-${skills.length}`)
+        await cp(skill.dir, backup, { recursive: true })
+        skills.push({ id, source: skill.dir, backup })
+      }
+    }
+    return {
+      workspace,
+      config: await snapshotText(paths.configPath),
+      registry: await snapshotText(registryFilePath()),
+      skills,
+    }
+  } catch (error) {
+    await rm(workspace, { recursive: true, force: true })
+    throw error
+  }
+}
+
+async function restoreInstallSnapshot(paths: ScopePaths, snapshot: InstallSnapshot, applied?: AppliedArtifacts) {
+  const failures: string[] = []
+  const attempt = async (work: () => Promise<void>) => {
+    try {
+      await work()
+    } catch (error) {
+      failures.push(message(error))
+    }
+  }
+
+  // Remove skills the new version created (including ones that took an old id), then copy the old
+  // content back. MCP servers and plugin entries are restored by writing the config snapshot.
+  if (applied) {
+    for (const id of applied.skills) await attempt(() => removeSkillNode(paths, id))
+  }
+  for (const skill of snapshot.skills) {
+    await attempt(async () => {
+      await removeSkillNode(paths, skill.id)
+      await cp(skill.backup, skill.source, { recursive: true })
+    })
+  }
+  await attempt(() => restoreText(snapshot.config))
+  await attempt(() => restoreText(snapshot.registry))
+  if (failures.length > 0) throw new Error(`Rollback failed: ${failures.join("; ")}`)
 }
 
 async function applyArtifacts(
@@ -1197,7 +1566,7 @@ async function applyArtifacts(
   extracted: Extracted,
   pluginSlug: string,
   enabled: boolean,
-): Promise<{ mcp: string[]; skills: string[]; plugins: string[] }> {
+): Promise<AppliedArtifacts> {
   const taken = await currentNames(paths)
   const mcpNames: string[] = []
   const skillIDs: string[] = []
@@ -1222,9 +1591,16 @@ async function applyArtifacts(
       const base = slug(`${pluginSlug}__${skill.id}`)
       const id = uniqueName(base, taken.skills)
       taken.skills.add(id)
-      await saveSkill(paths, { id, content: skill.content })
-      if (!enabled) await setSkillEnabled(paths, id, false)
-      skillIDs.push(id)
+      try {
+        await saveSkill(paths, { id, content: skill.content })
+        if (!enabled) await setSkillEnabled(paths, id, false)
+        skillIDs.push(id)
+      } catch (error) {
+        // saveSkill can fail after creating the folder but before writing SKILL.md; that partial
+        // folder is not discoverable by removeSkill, so clean both possible shapes directly.
+        await removeSkillNode(paths, id).catch(() => undefined)
+        throw error
+      }
     }
   } catch (error) {
     for (const id of skillIDs) await removeSkill(paths, id).catch(() => undefined)
@@ -1262,7 +1638,16 @@ export async function installMarketplacePlugin(input: {
   const record = findMarketplace(registry, input.marketplace)
   if (!record) throw new Error(`Marketplace not found: ${input.marketplace}`)
   const { loaded, entry, location, extracted } = await inspect(record, input.plugin, input.update === true)
-  const previous = registry.installed.find((item) => item.key === `${record.id}/${entry.name}`)
+  // Scope is part of the key, so installing the same plugin globally and in a project produces two
+  // independent records and two independent artifact sets.
+  const effectivePaths = await resolveScope(input.scope, input.project)
+  const key = installedKey(
+    record.id,
+    entry.name ?? input.plugin,
+    effectivePaths.scope,
+    effectivePaths.scope === "project" ? effectivePaths.root : undefined,
+  )
+  const previous = registry.installed.find((item) => item.key === key)
   const adapt = input.adapt ?? previous?.adapt ?? false
   const skills = new Map(extracted.skills.map((skill) => [skill.id, skill]))
   if (adapt) {
@@ -1279,97 +1664,171 @@ export async function installMarketplacePlugin(input: {
     )
   }
 
-  const effectiveScope = previous?.scope ?? input.scope
-  const effectiveProject = previous?.project ?? input.project
-  const effectivePaths = await resolveScope(effectiveScope, effectiveProject)
-  if (previous) await removeArtifacts(previous, effectivePaths)
-
   const enabled = previous?.enabled !== false
   const pluginSlug = slug(entry.name ?? input.plugin)
-  const applied = await applyArtifacts(
-    effectivePaths,
-    { ...extracted, skills: extractedSkills },
-    pluginSlug,
-    enabled,
-  )
-  const now = new Date().toISOString()
-  const next: InstalledRecord = {
-    key: `${record.id}/${entry.name}`,
-    marketplace: record.id,
-    marketplaceName: loaded.record.name,
-    plugin: entry.name ?? input.plugin,
-    ...(entry.displayName ? { displayName: entry.displayName } : {}),
-    ...(extracted.description ? { description: extracted.description } : {}),
-    scope: effectiveScope,
-    ...(effectiveScope === "project" ? { project: effectivePaths.root } : {}),
-    enabled,
-    ...(adapt ? { adapt: true } : {}),
-    installedAt: previous?.installedAt ?? now,
-    updatedAt: now,
-    ...(extracted.version ? { version: extracted.version } : {}),
-    ...(location.kind === "github" && location.ref ? { commit: location.ref } : {}),
-    mcp: applied.mcp,
-    skills: applied.skills,
-    plugins: applied.plugins,
-    unsupported: extracted.unsupported,
+  const snapshot = await createInstallSnapshot(effectivePaths, previous)
+  let applied: AppliedArtifacts | undefined
+  try {
+    const skipped = previous ? await removeArtifacts(previous, effectivePaths, "update") : []
+    applied = await applyArtifacts(
+      effectivePaths,
+      { ...extracted, skills: extractedSkills },
+      pluginSlug,
+      enabled,
+    )
+    const fingerprints = await captureFingerprints(effectivePaths, applied)
+    const now = new Date().toISOString()
+    const next: InstalledRecord = {
+      key,
+      marketplace: record.id,
+      marketplaceName: loaded.record.name,
+      plugin: entry.name ?? input.plugin,
+      ...(entry.displayName ? { displayName: entry.displayName } : {}),
+      ...(extracted.description ? { description: extracted.description } : {}),
+      scope: effectivePaths.scope,
+      ...(effectivePaths.scope === "project" ? { project: effectivePaths.root } : {}),
+      enabled,
+      ...(adapt ? { adapt: true } : {}),
+      installedAt: previous?.installedAt ?? now,
+      updatedAt: now,
+      ...(extracted.version ? { version: extracted.version } : {}),
+      ...(location.kind === "github" && location.ref ? { commit: location.ref } : {}),
+      mcp: applied.mcp,
+      skills: applied.skills,
+      plugins: applied.plugins,
+      unsupported: extracted.unsupported,
+      fingerprints,
+      ...(skipped.length > 0 ? { skipped } : {}),
+    }
+    // The registry is the commit point: it is written only after every artifact was applied.
+    await writeRegistry({
+      ...registry,
+      installed: [...registry.installed.filter((item) => item.key !== next.key), next],
+    })
+  } catch (error) {
+    try {
+      await restoreInstallSnapshot(effectivePaths, snapshot, applied)
+    } catch (rollbackError) {
+      throw new Error(`${message(error)} (${message(rollbackError)})`, { cause: error })
+    }
+    throw error
+  } finally {
+    await rm(snapshot.workspace, { recursive: true, force: true }).catch(() => undefined)
   }
-  await writeRegistry({
-    ...registry,
-    installed: [...registry.installed.filter((item) => item.key !== next.key), next],
-  })
 }
 
-export async function uninstallMarketplacePlugin(key: string): Promise<void> {
+export async function uninstallMarketplacePlugin(key: string): Promise<string[]> {
   const { registry } = await readRegistry()
   const record = registry.installed.find((item) => item.key === key)
   if (!record) throw new Error(`Installed plugin not found: ${key}`)
+  let skipped: string[] = []
   try {
     const paths = await resolveScope(record.scope, record.project)
-    await removeArtifacts(record, paths)
+    skipped = await removeArtifacts(record, paths, "remove")
   } catch {
     // The project folder may be gone; the registry entry still has to be removable.
   }
   await writeRegistry({ ...registry, installed: registry.installed.filter((item) => item.key !== key) })
+  return skipped
 }
 
-export async function setMarketplacePluginEnabled(key: string, enabled: boolean): Promise<void> {
+export async function setMarketplacePluginEnabled(key: string, enabled: boolean): Promise<string[]> {
   const { registry } = await readRegistry()
   const record = registry.installed.find((item) => item.key === key)
   if (!record) throw new Error(`Installed plugin not found: ${key}`)
-  if (record.enabled === enabled) return
+  if (record.enabled === enabled) return []
   const paths = await resolveScope(record.scope, record.project)
-  for (const name of record.mcp) {
-    try {
-      await setMcpEnabled(paths, name, enabled)
-    } catch {
-      // The server may have been edited or removed by hand.
+  const skipped: string[] = []
+
+  if (!enabled) {
+    // Disabling is destructive for plugin entries and changes MCP/skill state, so only touch
+    // artifacts that still match the content this manager installed.
+    const document = await readScope(paths)
+    const servers = mcpServers(document.data)
+    for (const name of record.mcp) {
+      const config = servers[name]
+      if (config === undefined) continue
+      const expected = record.fingerprints?.mcp?.[name]
+      if (expected === undefined) {
+        skipped.push(`MCP server "${name}" (no fingerprint)`)
+        continue
+      }
+      if (hashArtifact(mcpFingerprintValue(config)) !== expected) {
+        skipped.push(`MCP server "${name}"`)
+        continue
+      }
+      try {
+        await setMcpEnabled(paths, name, false)
+      } catch {
+        skipped.push(`MCP server "${name}"`)
+      }
     }
-  }
-  for (const id of record.skills) {
+
+    let skills: Awaited<ReturnType<typeof listSkills>> = []
     try {
-      await setSkillEnabled(paths, id, enabled)
+      skills = await listSkills(paths.skillsDir)
     } catch {
-      // The skill may have been edited or removed by hand.
+      skills = []
     }
-  }
-  for (const spec of record.plugins) {
-    try {
-      if (enabled) {
+    for (const id of record.skills) {
+      const skill = skills.find((item) => item.id === id)
+      if (!skill) continue
+      const expected = record.fingerprints?.skills?.[id]
+      if (expected === undefined) {
+        skipped.push(`Skill "${id}" (no fingerprint)`)
+        continue
+      }
+      if (hashArtifact(skill.content) !== expected) {
+        skipped.push(`Skill "${id}"`)
+        continue
+      }
+      try {
+        await setSkillEnabled(paths, id, false)
+      } catch {
+        skipped.push(`Skill "${id}"`)
+      }
+    }
+
+    skipped.push(...(await removePluginArtifacts(paths, record, "remove")))
+  } else {
+    for (const name of record.mcp) {
+      try {
+        await setMcpEnabled(paths, name, true)
+      } catch {
+        // The server may have been edited or removed by hand.
+      }
+    }
+    for (const id of record.skills) {
+      try {
+        await setSkillEnabled(paths, id, true)
+      } catch {
+        // The skill may have been edited or removed by hand.
+      }
+    }
+    for (const spec of record.plugins) {
+      try {
         const document = await readScope(paths)
         if (!hasPlugin(document, spec)) await savePlugin(paths, { package: spec })
-      } else {
-        await removePluginPackage(paths, spec)
+      } catch {
+        // The plugin entry may have been edited by hand.
       }
-    } catch {
-      // The plugin entry may have been edited by hand.
     }
   }
+
   await writeRegistry({
     ...registry,
-    installed: registry.installed.map((item) =>
-      item.key === key ? { ...item, enabled, updatedAt: new Date().toISOString() } : item,
-    ),
+    installed: registry.installed.map((item) => {
+      if (item.key !== key) return item
+      const { skipped: _previous, ...rest } = item
+      return {
+        ...rest,
+        enabled,
+        updatedAt: new Date().toISOString(),
+        ...(skipped.length > 0 ? { skipped } : {}),
+      }
+    }),
   })
+  return skipped
 }
 
 export async function updateMarketplacePlugin(key: string): Promise<void> {
@@ -1574,14 +2033,41 @@ export async function normalizeMcpUrls(paths: ScopePaths, names?: readonly strin
 export async function normalizeInstalledMcpUrls() {
   const { registry } = await readRegistry()
   let changed = false
+  const installed: InstalledRecord[] = []
   for (const record of registry.installed) {
-    if (record.mcp.length === 0) continue
+    if (record.mcp.length === 0) {
+      installed.push(record)
+      continue
+    }
     try {
       const paths = await resolveScope(record.scope, record.project)
-      if (await normalizeMcpUrls(paths, record.mcp)) changed = true
+      if (!(await normalizeMcpUrls(paths, record.mcp))) {
+        installed.push(record)
+        continue
+      }
+      changed = true
+      // This automated URL rewrite is not a user edit: refresh the fingerprints for the managed
+      // servers so a later uninstall can still recognize them as owned.
+      const document = await readScope(paths)
+      const servers = mcpServers(document.data)
+      const mcp = { ...record.fingerprints?.mcp }
+      for (const name of record.mcp) {
+        const config = servers[name]
+        if (config !== undefined) mcp[name] = hashArtifact(mcpFingerprintValue(config))
+      }
+      installed.push({
+        ...record,
+        fingerprints: {
+          mcp,
+          skills: record.fingerprints?.skills ?? {},
+          plugins: record.fingerprints?.plugins ?? {},
+        },
+      })
     } catch {
       // A missing project or an unreadable config is not fatal for the migration.
+      installed.push(record)
     }
   }
+  if (changed) await writeRegistry({ ...registry, installed })
   return changed
 }

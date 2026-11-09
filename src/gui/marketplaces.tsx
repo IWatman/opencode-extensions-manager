@@ -48,8 +48,22 @@ export function MarketplacesSection(props: {
 
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
   const installed = () => props.state.installedPlugins
-  const installedKeys = createMemo(() => new Set(installed().map((item) => item.key)))
+  const projectRoot = () => props.state.project?.root ?? props.project?.trim()
   const selectedMarketplace = createMemo(() => marketplaces().find((item) => item.id === selected()))
+  /**
+   * A catalog row is installed only for the scope currently shown. The same marketplace plugin may
+   * be installed globally and in this project at the same time, so matching by name alone is wrong.
+   */
+  const isInstalled = (plugin: MarketplacePlugin) =>
+    installed().some(
+      (item) =>
+        item.marketplace === plugin.marketplace &&
+        item.plugin === plugin.name &&
+        item.scope === props.scope &&
+        (props.scope === "global" || (item.project !== undefined && item.project === projectRoot())),
+    )
+  const withSkipped = (message: string, skipped: readonly string[] | undefined) =>
+    skipped && skipped.length > 0 ? `${message}. ${skipped.join("; ")}` : message
   let marketplaceGeneration = 0
   let catalogGeneration = 0
 
@@ -78,6 +92,8 @@ export function MarketplacesSection(props: {
       const output = await ctx.client.rpc(ManagerRpc).catalog({
         marketplace,
         ...(refresh ? { refresh: true } : {}),
+        scope: props.scope,
+        ...target(),
       })
       if (current !== catalogGeneration) return
       setCatalog(output.plugins)
@@ -159,12 +175,10 @@ export function MarketplacesSection(props: {
         enabled,
         ...target(),
       })
-      props.saved(
-        next,
-        ctx.t(enabled ? "marketplaces.pluginEnabled" : "marketplaces.pluginDisabled", {
-          name: item.displayName ?? item.plugin,
-        }),
-      )
+      const message = ctx.t(enabled ? "marketplaces.pluginEnabled" : "marketplaces.pluginDisabled", {
+        name: item.displayName ?? item.plugin,
+      })
+      props.saved(next, withSkipped(message, next.skipped))
     } catch (error) {
       props.failed(error)
     } finally {
@@ -203,7 +217,8 @@ export function MarketplacesSection(props: {
         key: item.key,
         ...target(),
       })
-      props.saved(next, ctx.t("marketplaces.deleted", { name: item.displayName ?? item.plugin }))
+      const message = ctx.t("marketplaces.deleted", { name: item.displayName ?? item.plugin })
+      props.saved(next, withSkipped(message, next.skipped))
     } catch (error) {
       props.failed(error)
     } finally {
@@ -407,6 +422,9 @@ export function MarketplacesSection(props: {
                           {ctx.t("marketplaces.unsupportedParts", { parts: item.unsupported.join(", ") })}
                         </span>
                       </Show>
+                      <Show when={item.skipped && item.skipped.length > 0}>
+                        <span class="oem-error">{item.skipped!.join("; ")}</span>
+                      </Show>
                       <Show when={item.error}>
                         <span class="oem-error">{item.error}</span>
                       </Show>
@@ -499,7 +517,6 @@ export function MarketplacesSection(props: {
           <For each={visible()}>
             {(plugin) => {
               const key = `${plugin.marketplace}/${plugin.name}`
-              const isInstalled = () => installedKeys().has(key)
               const busy = () => props.busy === `inspect:${key}`
               return (
                 <ctx.ui.SettingsRow
@@ -527,7 +544,7 @@ export function MarketplacesSection(props: {
                   }
                 >
                   <Show
-                    when={!isInstalled()}
+                    when={!isInstalled(plugin)}
                     fallback={
                       <ctx.ui.Button size="small" disabled>
                         {ctx.t("marketplaces.installed")}
