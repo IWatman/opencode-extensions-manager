@@ -183,16 +183,10 @@ export function ClaudeImportSection(props: {
 
       <Show when={preview()?.exists && preview()!.candidates.length > 0}>
         <ctx.ui.SettingsRow
-          title={ctx.t("claude.count", { count: preview()!.candidates.length })}
-          description={ctx.t("claude.selected", { count: selected().size })}
+          title={<span class="oem-nowrap">{ctx.t("claude.count", { count: preview()!.candidates.length })}</span>}
+          description={<span class="oem-nowrap">{ctx.t("claude.selected", { count: selected().size })}</span>}
         >
-          <div class="oem-actions">
-            <ctx.ui.Switch
-              checked={adapt()}
-              onChange={setAdapt}
-              label={ctx.t("claude.adapt")}
-              description={ctx.t("claude.adaptHint")}
-            />
+          <div class="oem-actions oem-row-actions">
             <ctx.ui.Button
               variant="contrast"
               icon="download"
@@ -204,6 +198,14 @@ export function ClaudeImportSection(props: {
               {ctx.t("claude.installSelected")}
             </ctx.ui.Button>
           </div>
+        </ctx.ui.SettingsRow>
+        <ctx.ui.SettingsRow title={ctx.t("claude.adapt")} description={ctx.t("claude.adaptHint")}>
+          <ctx.ui.Switch
+            checked={adapt()}
+            onChange={setAdapt}
+            label={ctx.t("claude.adapt")}
+            hideLabel
+          />
         </ctx.ui.SettingsRow>
       </Show>
 

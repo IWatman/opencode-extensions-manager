@@ -92,6 +92,8 @@ export const styles = `
 
 .oem-muted { opacity: 0.6; }
 
+.oem-nowrap { white-space: nowrap; }
+
 .oem-error {
   font-size: 12px;
   line-height: 1.5;
@@ -110,6 +112,16 @@ export const styles = `
 .oem-actions-wide {
   flex: 1;
   justify-content: flex-end;
+  min-width: 0;
+}
+
+.oem-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 100%;
   min-width: 0;
 }
 
