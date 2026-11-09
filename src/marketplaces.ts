@@ -166,7 +166,7 @@ function normalizeFingerprints(value: unknown): ArtifactFingerprints | undefined
   return { mcp: mcp ?? {}, skills: skills ?? {}, plugins: plugins ?? {} }
 }
 
-function normalizeRegistry(input: unknown): Registry {
+export function normalizeRegistry(input: unknown): Registry {
   if (!isRecord(input)) return emptyRegistry()
   const marketplaces = Array.isArray(input.marketplaces)
     ? input.marketplaces.filter(isRecord).flatMap((entry) => {

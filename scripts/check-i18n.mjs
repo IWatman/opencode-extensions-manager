@@ -149,7 +149,7 @@ const englishKeySet = new Set(englishKeys)
  * New sections can ship English copy first; every other locale falls back to English at runtime.
  * Keep this list narrow so a forgotten translation in an already translated section still fails.
  */
-const fallbackPrefixes = ["claude.", "updates.", "doctor."]
+const fallbackPrefixes = ["claude.", "updates."]
 const isFallbackKey = (key) => fallbackPrefixes.some((prefix) => key.startsWith(prefix))
 
 if (english.duplicates.size > 0) {
