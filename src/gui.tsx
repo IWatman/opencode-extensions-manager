@@ -33,6 +33,18 @@ export default Plugin.define({
           keywords:
             "doctor diagnostics warnings errors duplicates mcp plugin jsonc parse skills folder failed needs auth",
         },
+        {
+          id: "oem-claude-cache",
+          title: ctx.t("claude.title"),
+          description: ctx.t("claude.description"),
+          keywords: "claude code import cache plugins skills mcp preview",
+        },
+        {
+          id: "oem-updates-check",
+          title: ctx.t("updates.title"),
+          description: ctx.t("updates.description"),
+          keywords: "updates outdated marketplace batch versions commits",
+        },
       ],
       render: () => <ExtensionsPage ctx={ctx} />,
     }))

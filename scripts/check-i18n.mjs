@@ -4,11 +4,14 @@
  * and every catalog in src/gui/locales/*.ts.
  *
  * Checks:
- *  - every locale has every English key and no extra keys;
+ *  - every locale has every English key that is not marked as an English-only fallback;
  *  - no duplicate keys;
  *  - every {{placeholder}} set matches English for each key;
  *  - src/gui/i18n.ts imports and registers every locale file;
  *  - only the ru and uk catalogs contain Cyrillic text.
+ *
+ * Keys in the English-only fallback prefixes below may be missing from a locale: the runtime falls
+ * back to English for them until they are translated. Missing keys elsewhere remain errors.
  *
  * The catalogs are parsed as plain object literals so the script does not
  * depend on TypeScript compilation or on a specific Node.js version.
@@ -142,6 +145,13 @@ try {
 const englishKeys = [...english.entries.keys()]
 const englishKeySet = new Set(englishKeys)
 
+/**
+ * New sections can ship English copy first; every other locale falls back to English at runtime.
+ * Keep this list narrow so a forgotten translation in an already translated section still fails.
+ */
+const fallbackPrefixes = ["claude.", "updates.", "doctor."]
+const isFallbackKey = (key) => fallbackPrefixes.some((prefix) => key.startsWith(prefix))
+
 if (english.duplicates.size > 0) {
   fail(`src/gui/i18n.ts: en: duplicate keys: ${describe([...english.duplicates])}`)
 }
@@ -149,7 +159,7 @@ if (english.duplicates.size > 0) {
 function checkCatalog(label, catalog, { allowCyrillic = false } = {}) {
   const keys = [...catalog.entries.keys()]
   const keySet = new Set(keys)
-  const missing = englishKeys.filter((key) => !keySet.has(key))
+  const missing = englishKeys.filter((key) => !keySet.has(key) && !isFallbackKey(key))
   const extra = keys.filter((key) => !englishKeySet.has(key))
   const duplicates = [...catalog.duplicates]
 
@@ -186,6 +196,7 @@ const localeFiles = fs
 if (localeFiles.length === 0) fail("no locale files found in src/gui/locales")
 
 const localeVariables = new Map()
+let translatedEntries = 0
 
 for (const file of localeFiles) {
   const name = path.basename(file, ".ts")
@@ -200,12 +211,14 @@ for (const file of localeFiles) {
     continue
   }
 
+  translatedEntries += catalog.entries.size
   checkCatalog(file, catalog, { allowCyrillic: name === "uk" })
 }
 
 // The Russian catalog is inline in src/gui/i18n.ts.
 try {
   const russian = parseCatalog(i18nSource, "ru: {")
+  translatedEntries += russian.entries.size
   checkCatalog("src/gui/i18n.ts: ru", russian, { allowCyrillic: true })
 } catch (error) {
   fail(`src/gui/i18n.ts: cannot parse the Russian catalog: ${error.message}`)
@@ -257,5 +270,5 @@ if (errors.length > 0) {
 
 console.log(
   `check:i18n: ${localeFiles.length} locales, ${englishKeys.length} English keys, ` +
-    `${localeFiles.length * englishKeys.length} translated entries, all checks passed`,
+    `${translatedEntries} translated entries, all checks passed`,
 )

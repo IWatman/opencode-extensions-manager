@@ -18,6 +18,7 @@ import {
 } from "./config"
 import {
   ManagerRpc,
+  type ClaudeInstallResult,
   type Diagnostic,
   type InstalledPlugin,
   type ManagerState,
@@ -30,6 +31,7 @@ import {
 } from "./rpc"
 import {
   addMarketplace,
+  checkMarketplaceUpdates,
   getCatalog,
   inspectMarketplacePlugin,
   inspectRepository,
@@ -46,7 +48,13 @@ import {
   setMarketplacePluginEnabled,
   uninstallMarketplacePlugin,
   updateMarketplacePlugin,
+  updateMarketplacePlugins,
 } from "./marketplaces"
+import {
+  installClaudeCandidate,
+  previewClaudePlugins,
+  scanClaudePlugins,
+} from "./claude"
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error)
@@ -269,6 +277,61 @@ export default Plugin.define({
         withWriteLock(async () => {
           await updateMarketplacePlugin(input.key)
           return buildState(input.project)
+        }),
+
+      checkMarketplaceUpdates: () => checkMarketplaceUpdates(),
+
+      updateAllMarketplacePlugins: (input) =>
+        withWriteLock(async () => {
+          const results = await updateMarketplacePlugins(input.keys)
+          return { state: await buildState(input.project), results }
+        }),
+
+      previewClaudePlugins: (input) =>
+        previewClaudePlugins({
+          scope: input.scope,
+          ...(input.project ? { project: input.project } : {}),
+          ...(input.cacheDir ? { cacheDir: input.cacheDir } : {}),
+        }),
+
+      installClaudePlugins: (input) =>
+        withWriteLock(async () => {
+          const scan = await scanClaudePlugins(input.cacheDir ? { cacheDir: input.cacheDir } : {})
+          const candidates = new Map(scan.candidates.map((candidate) => [candidate.id, candidate]))
+          const results: ClaudeInstallResult[] = []
+          const seen = new Set<string>()
+          for (const selection of input.plugins) {
+            if (seen.has(selection.id)) continue
+            seen.add(selection.id)
+            const candidate = candidates.get(selection.id)
+            if (!candidate) {
+              results.push({
+                id: selection.id,
+                name: selection.id,
+                ok: false,
+                error: `Claude Code plugin not found: ${selection.id}`,
+              })
+              continue
+            }
+            const name = candidate.displayName ?? candidate.name
+            try {
+              const installed = await installClaudeCandidate(candidate, {
+                scope: input.scope,
+                ...(input.project ? { project: input.project } : {}),
+                ...(selection.adapt === undefined ? {} : { adapt: selection.adapt }),
+              })
+              results.push({
+                id: candidate.id,
+                name,
+                ok: true,
+                key: installed.key,
+                ...(installed.skipped.length > 0 ? { skipped: installed.skipped } : {}),
+              })
+            } catch (error) {
+              results.push({ id: candidate.id, name, ok: false, error: message(error) })
+            }
+          }
+          return { state: await buildState(input.project), results }
         }),
 
       inspectRepository: (input) => inspectRepository(input.url),

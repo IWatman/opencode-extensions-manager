@@ -1,5 +1,6 @@
 import { createSignal, onMount, Show } from "solid-js"
 import { ManagerRpc, type ManagerState, type Scope } from "../rpc"
+import { ClaudeImportSection } from "./claude"
 import { DoctorSection } from "./doctor"
 import { errorText, revealPath, runtimeStatus, type GuiContext } from "./helpers"
 import { McpSection, type McpStatusMap } from "./mcp"
@@ -248,6 +249,17 @@ export function ExtensionsPage(props: { ctx: GuiContext }) {
             />
 
             <MarketplacesSection
+              ctx={ctx}
+              scope={scope()}
+              project={project()}
+              state={current()}
+              busy={busy()}
+              setBusy={setBusy}
+              saved={saved}
+              failed={failed}
+            />
+
+            <ClaudeImportSection
               ctx={ctx}
               scope={scope()}
               project={project()}
