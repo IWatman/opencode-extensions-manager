@@ -8,6 +8,7 @@
     "jsxImportSource": "solid-js",
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -17,5 +18,5 @@
     "types": ["node"],
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "test", "vite.config.ts"]
 }
