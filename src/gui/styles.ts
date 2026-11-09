@@ -49,6 +49,10 @@ export const styles = `
 .oem-status-disabled,
 .oem-status-unknown { opacity: 0.55; }
 
+.oem-doctor-error { color: #e5484d; opacity: 0.9; }
+.oem-doctor-warning { color: #d29922; opacity: 0.9; }
+.oem-doctor-info { opacity: 0.6; }
+
 .oem-description {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
-import { createSignal, For, onMount, Show } from "solid-js"
+import { createSignal, onMount, Show } from "solid-js"
 import { ManagerRpc, type ManagerState, type Scope } from "../rpc"
+import { DoctorSection } from "./doctor"
 import { errorText, revealPath, runtimeStatus, type GuiContext } from "./helpers"
 import { McpSection, type McpStatusMap } from "./mcp"
 import { MarketplacesSection } from "./marketplaces"
@@ -14,20 +15,33 @@ export function ExtensionsPage(props: { ctx: GuiContext }) {
   const [scope, setScope] = createSignal<Scope>("global")
   const [project, setProject] = createSignal<string | undefined>(ctx.sessions.current()?.location?.directory)
   const [busy, setBusy] = createSignal<string>()
-  const [statuses, setStatuses] = createSignal<McpStatusMap>({})
+  const [statuses, setStatuses] = createSignal<Record<Scope, McpStatusMap>>({ global: {}, project: {} })
 
   let generation = 0
 
+  const statusMap = (servers: readonly { name: string; status: unknown }[] | undefined) => {
+    const next: Record<string, McpStatusMap[string]> = {}
+    for (const server of servers ?? []) next[server.name] = runtimeStatus(server.status)
+    return next
+  }
+
   const loadStatuses = async () => {
     try {
-      // Runtime status is per Location. Global entries must not inherit a project server of the same name.
-      const path = scope() === "project" ? project()?.trim() : undefined
-      const output = await ctx.client.mcp.list(path ? { location: { directory: path } } : {})
-      const next: Record<string, { status: ReturnType<typeof runtimeStatus>["status"]; error?: string }> = {}
-      for (const server of output.data ?? []) {
-        next[server.name] = runtimeStatus(server.status)
-      }
-      setStatuses(next)
+      // Runtime status is per Location. Load both scopes so Doctor can report every server without mixing names.
+      const path = project()?.trim()
+      const [globalServers, projectServers] = await Promise.all([
+        ctx.client.mcp.list({}).then(
+          (output) => output.data,
+          () => undefined,
+        ),
+        path
+          ? ctx.client.mcp.list({ location: { directory: path } }).then(
+              (output) => output.data,
+              () => undefined,
+            )
+          : Promise.resolve(undefined),
+      ])
+      setStatuses({ global: statusMap(globalServers), project: statusMap(projectServers) })
     } catch {
       // Runtime status is best-effort: the page still manages config when the server is unreachable.
     }
@@ -72,14 +86,6 @@ export function ExtensionsPage(props: { ctx: GuiContext }) {
   }
 
   const info = () => (scope() === "global" ? state()?.global : state()?.project)
-
-  const diagnostics = () => {
-    const current = state()
-    if (!current) return []
-    const list = [...current.diagnostics]
-    if (current.projectError) list.unshift({ scope: "project" as const, message: current.projectError })
-    return list
-  }
 
   const pickProject = async () => {
     try {
@@ -224,7 +230,7 @@ export function ExtensionsPage(props: { ctx: GuiContext }) {
               project={project()}
               state={current()}
               busy={busy()}
-              statuses={statuses()}
+              statuses={statuses()[scope()]}
               setBusy={setBusy}
               saved={saved}
               failed={failed}
@@ -263,18 +269,19 @@ export function ExtensionsPage(props: { ctx: GuiContext }) {
               failed={failed}
             />
 
-            <Show when={diagnostics().length > 0}>
-              <ctx.ui.SettingsSection title={ctx.t("diagnostics.title")}>
-                <For each={diagnostics()}>
-                  {(diagnostic) => (
-                    <ctx.ui.SettingsRow
-                      title={`${diagnostic.scope === "global" ? ctx.t("scope.global") : ctx.t("scope.project")} — ${ctx.t("diagnostics.warning")}`}
-                      description={<span class="oem-error">{diagnostic.message}</span>}
-                    />
-                  )}
-                </For>
-              </ctx.ui.SettingsSection>
-            </Show>
+            <DoctorSection
+              ctx={ctx}
+              project={project()}
+              state={current()}
+              statuses={statuses()}
+              busy={busy()}
+              loading={loading()}
+              setBusy={setBusy}
+              saved={saved}
+              failed={failed}
+              refresh={refresh}
+              refreshStatuses={loadStatuses}
+            />
 
             <ctx.ui.SettingsSection>
               <ctx.ui.SettingsRow title={<span class="oem-hint">{ctx.t("footer.note")}</span>} />
