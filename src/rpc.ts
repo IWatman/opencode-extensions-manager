@@ -168,6 +168,98 @@ const PluginInspection = Schema.Struct({
 })
 export type PluginInspection = typeof PluginInspection.Type
 
+const ClaudePluginCandidate = Schema.Struct({
+  /** Stable cache-relative id; a newer cached version of the same plugin keeps this id. */
+  id: Schema.String,
+  name: Schema.String,
+  displayName: Schema.optionalKey(Schema.String),
+  description: Schema.optionalKey(Schema.String),
+  version: Schema.optionalKey(Schema.String),
+  marketplace: Schema.optionalKey(Schema.String),
+  /** Absolute path of the plugin folder that would be imported. */
+  source: Schema.String,
+  mcp: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      summary: Schema.String,
+    }),
+  ),
+  skills: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.optionalKey(Schema.String),
+      description: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  adaptable: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.optionalKey(Schema.String),
+      description: Schema.optionalKey(Schema.String),
+      reason: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  plugins: Schema.Array(Schema.String),
+  unsupported: Schema.Array(Schema.String),
+  warnings: Schema.Array(Schema.String),
+  /** Registry key when this plugin is already imported in the selected scope. */
+  installedKey: Schema.optionalKey(Schema.String),
+  error: Schema.optionalKey(Schema.String),
+})
+export type ClaudePluginCandidate = typeof ClaudePluginCandidate.Type
+
+const ClaudePreview = Schema.Struct({
+  cacheDir: Schema.String,
+  exists: Schema.Boolean,
+  candidates: Schema.Array(ClaudePluginCandidate),
+  warnings: Schema.Array(Schema.String),
+  error: Schema.optionalKey(Schema.String),
+})
+export type ClaudePreview = typeof ClaudePreview.Type
+
+const ClaudeInstallResult = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  ok: Schema.Boolean,
+  key: Schema.optionalKey(Schema.String),
+  skipped: Schema.optionalKey(Schema.Array(Schema.String)),
+  error: Schema.optionalKey(Schema.String),
+})
+export type ClaudeInstallResult = typeof ClaudeInstallResult.Type
+
+const MarketplaceUpdate = Schema.Struct({
+  key: Schema.String,
+  marketplace: Schema.String,
+  marketplaceName: Schema.String,
+  plugin: Schema.String,
+  displayName: Schema.optionalKey(Schema.String),
+  scope: Scope,
+  project: Schema.optionalKey(Schema.String),
+  currentVersion: Schema.optionalKey(Schema.String),
+  latestVersion: Schema.optionalKey(Schema.String),
+  currentCommit: Schema.optionalKey(Schema.String),
+  latestCommit: Schema.optionalKey(Schema.String),
+  source: Schema.optionalKey(Schema.String),
+  updateAvailable: Schema.Boolean,
+  status: Schema.Literals(["outdated", "current", "skipped", "error"]),
+  error: Schema.optionalKey(Schema.String),
+})
+export type MarketplaceUpdate = typeof MarketplaceUpdate.Type
+
+const BatchUpdateResult = Schema.Struct({
+  key: Schema.String,
+  marketplace: Schema.String,
+  marketplaceName: Schema.String,
+  plugin: Schema.String,
+  displayName: Schema.optionalKey(Schema.String),
+  scope: Scope,
+  project: Schema.optionalKey(Schema.String),
+  ok: Schema.Boolean,
+  skipped: Schema.optionalKey(Schema.Array(Schema.String)),
+  error: Schema.optionalKey(Schema.String),
+})
+export type BatchUpdateResult = typeof BatchUpdateResult.Type
+
 const RepositoryProposal = Schema.Struct({
   kind: Schema.Literals(["mcp", "plugin"]),
   name: Schema.optionalKey(Schema.String),
@@ -402,6 +494,62 @@ export const ManagerRpc = Rpc.define({
         }),
       ),
       output: portable(StateSchema),
+    },
+    checkMarketplaceUpdates: {
+      input: portable(Schema.Struct({})),
+      output: portable(
+        Schema.Struct({
+          checkedAt: Schema.String,
+          plugins: Schema.Array(MarketplaceUpdate),
+        }),
+      ),
+    },
+    updateAllMarketplacePlugins: {
+      input: portable(
+        Schema.Struct({
+          /** Keys returned by `checkMarketplaceUpdates`; omitted updates every outdated plugin. */
+          keys: Schema.optionalKey(Schema.Array(Schema.String)),
+          project: Schema.optionalKey(Schema.String),
+        }),
+      ),
+      output: portable(
+        Schema.Struct({
+          state: StateSchema,
+          results: Schema.Array(BatchUpdateResult),
+        }),
+      ),
+    },
+    previewClaudePlugins: {
+      input: portable(
+        Schema.Struct({
+          scope: Scope,
+          project: Schema.optionalKey(Schema.String),
+          /** Overrides the default `~/.claude/plugins/cache`; mainly for tests and custom setups. */
+          cacheDir: Schema.optionalKey(Schema.String),
+        }),
+      ),
+      output: portable(ClaudePreview),
+    },
+    installClaudePlugins: {
+      input: portable(
+        Schema.Struct({
+          scope: Scope,
+          project: Schema.optionalKey(Schema.String),
+          cacheDir: Schema.optionalKey(Schema.String),
+          plugins: Schema.Array(
+            Schema.Struct({
+              id: Schema.String,
+              adapt: Schema.optionalKey(Schema.Boolean),
+            }),
+          ),
+        }),
+      ),
+      output: portable(
+        Schema.Struct({
+          state: StateSchema,
+          results: Schema.Array(ClaudeInstallResult),
+        }),
+      ),
     },
     inspectRepository: {
       input: portable(

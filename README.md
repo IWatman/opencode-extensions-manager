@@ -160,6 +160,27 @@ Marketplace metadata and installed records are stored in:
 
 Uninstalling a marketplace plugin removes only the MCP servers, skills, and plugin entries that the manager added.
 
+### Import from Claude Code
+
+The manager can scan Claude Code's plugin cache (`~/.claude/plugins/cache`, or `$CLAUDE_CONFIG_DIR/plugins/cache`) and preview compatible parts before anything is installed.
+
+1. Open **Import from Claude Code**. The section scans the cache when it opens; click **Scan again** to refresh.
+2. Review each cached plugin: MCP servers, skills, OpenCode plugins, and unsupported Claude Code parts. The source path is shown for every candidate.
+3. Select the plugins to import and confirm. Source folders are only read.
+4. Optional: enable **Adapt skills without frontmatter** to add a minimal YAML frontmatter to skills that need it.
+
+Imports use the same transactional install path and ownership fingerprints as marketplace plugins, so uninstall and disable only remove artifacts that still match what was installed.
+
+### Update center
+
+The **Update center** checks every installed marketplace plugin against its marketplace source.
+
+1. Click **Check for updates**.
+2. Review outdated plugins with their current and latest versions or commits when available.
+3. Click **Update all outdated** to run a batch. Each plugin is updated independently; one failure does not stop the rest, and per-plugin results show successes, failures, and artifacts kept because they no longer match the installation fingerprint.
+
+Single-plugin updates from the installed list still work the same way.
+
 ## MCP OAuth
 
 OpenCode performs the browser OAuth flow. The manager prepares the configuration and copies the command:
@@ -255,6 +276,7 @@ After changing GUI code, run `npm run build` and restart OpenCode Desktop. Serve
 - Built for OpenCode 2.2.x and its experimental GUI API.
 - Claude Code commands, agents, hooks, and LSP servers are not supported by OpenCode.
 - GitHub API rate limits apply when fetching marketplace plugin trees. Trees are cached for five minutes.
+- Update checks use version metadata or resolved GitHub commit SHAs. A local marketplace that changes files without changing either is reported as current.
 - Skills are scanned one level deep: `<skillsDir>/<id>/SKILL.md` and `<skillsDir>/<id>.md`.
 - The OAuth browser flow is started by the OpenCode CLI, not by the manager.
 - Marketplace installations are always manual; nothing from the default catalog is installed automatically.

@@ -1,10 +1,12 @@
 import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import {
   ManagerRpc,
+  type BatchUpdateResult,
   type InstalledPlugin,
   type ManagerState,
   type MarketplaceInfo,
   type MarketplacePlugin,
+  type MarketplaceUpdate,
   type PluginInspection,
   type RepositoryInspection,
   type RepositoryProposal,
@@ -13,6 +15,8 @@ import {
 import { errorText, isRecord, type GuiContext } from "./helpers"
 
 const catalogLimit = 80
+/** Must match the synthetic marketplace id used by the server for Claude Code imports. */
+const CLAUDE_MARKETPLACE_ID = "claude-code"
 
 function repositorySummary(proposal: RepositoryProposal) {
   if (proposal.kind === "plugin") return proposal.package ?? ""
@@ -45,6 +49,14 @@ export function MarketplacesSection(props: {
   const [catalogLoading, setCatalogLoading] = createSignal(false)
   const [catalogError, setCatalogError] = createSignal<string>()
   const [query, setQuery] = createSignal("")
+  const [updateCheck, setUpdateCheck] = createSignal<{
+    checkedAt: string
+    plugins: readonly MarketplaceUpdate[]
+  }>()
+  const [checking, setChecking] = createSignal(false)
+  const [checkError, setCheckError] = createSignal<string>()
+  const [updatingAll, setUpdatingAll] = createSignal(false)
+  const [updateResults, setUpdateResults] = createSignal<readonly BatchUpdateResult[]>([])
 
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
   const installed = () => props.state.installedPlugins
@@ -201,6 +213,70 @@ export function MarketplacesSection(props: {
       props.setBusy(undefined)
     }
   }
+
+  const outdated = createMemo(() => (updateCheck()?.plugins ?? []).filter((item) => item.updateAvailable))
+  const updateProblems = createMemo(() =>
+    (updateCheck()?.plugins ?? []).filter((item) => item.status === "error" || item.status === "skipped"),
+  )
+
+  const runUpdateCheck = async () => {
+    setChecking(true)
+    setCheckError(undefined)
+    try {
+      const output = await ctx.client.rpc(ManagerRpc).checkMarketplaceUpdates({})
+      setUpdateCheck(output)
+    } catch (error) {
+      setCheckError(errorText(error))
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const updateAllOutdated = async () => {
+    const keys = outdated().map((item) => item.key)
+    if (keys.length === 0) return
+    setUpdatingAll(true)
+    setUpdateResults([])
+    try {
+      const output = await ctx.client.rpc(ManagerRpc).updateAllMarketplacePlugins({
+        keys,
+        ...target(),
+      })
+      setUpdateResults(output.results)
+      const updated = output.results.filter((item) => item.ok).length
+      const failed = output.results.filter((item) => !item.ok).length
+      const kept = output.results.filter((item) => item.ok && item.skipped && item.skipped.length > 0).length
+      const summary = ctx.t("updates.summary", { updated, failed, skipped: kept })
+      if (updated > 0) props.saved(output.state, summary)
+      else props.failed(new Error(summary))
+      await runUpdateCheck()
+    } catch (error) {
+      props.failed(error)
+    } finally {
+      setUpdatingAll(false)
+    }
+  }
+
+  const shortCommit = (value: string) => (value.length > 10 ? value.slice(0, 7) : value)
+
+  const versionLine = (item: MarketplaceUpdate) => {
+    if (!item.currentVersion && !item.latestVersion) return undefined
+    return ctx.t("updates.versionChange", {
+      current: item.currentVersion ?? ctx.t("updates.unknown"),
+      latest: item.latestVersion ?? ctx.t("updates.unknown"),
+    })
+  }
+
+  const commitLine = (item: MarketplaceUpdate) => {
+    if (!item.currentCommit && !item.latestCommit) return undefined
+    if (item.currentCommit && item.latestCommit && item.currentCommit === item.latestCommit) return undefined
+    return ctx.t("updates.commitChange", {
+      current: item.currentCommit ? shortCommit(item.currentCommit) : ctx.t("updates.unknown"),
+      latest: item.latestCommit ? shortCommit(item.latestCommit) : ctx.t("updates.unknown"),
+    })
+  }
+
+  const scopeLabel = (scope: Scope) => ctx.t(scope === "global" ? "scope.global" : "scope.project")
 
   const removeInstalled = async (item: InstalledPlugin) => {
     const confirmed = await ctx.dialogs.confirm({
@@ -439,13 +515,15 @@ export function MarketplacesSection(props: {
                       hideLabel
                       onChange={(enabled) => void toggleInstalled(item, enabled)}
                     />
-                    <ctx.ui.IconButton
-                      icon="refresh"
-                      size="small"
-                      label={ctx.t("marketplaces.update")}
-                      disabled={props.busy === key()}
-                      onClick={() => void updateInstalled(item)}
-                    />
+                    <Show when={item.marketplace !== CLAUDE_MARKETPLACE_ID}>
+                      <ctx.ui.IconButton
+                        icon="refresh"
+                        size="small"
+                        label={ctx.t("marketplaces.update")}
+                        disabled={props.busy === key()}
+                        onClick={() => void updateInstalled(item)}
+                      />
+                    </Show>
                     <ctx.ui.IconButton
                       icon="trash"
                       size="small"
@@ -458,6 +536,148 @@ export function MarketplacesSection(props: {
               )
             }}
           </For>
+        </Show>
+      </ctx.ui.SettingsSection>
+
+      <ctx.ui.SettingsSection
+        title={
+          updateCheck()
+            ? `${ctx.t("updates.title")} (${ctx.t("updates.outdatedCount", { count: outdated().length })})`
+            : ctx.t("updates.title")
+        }
+        footer={
+          <div class="oem-footer">
+            <span class="oem-hint">{ctx.t("updates.description")}</span>
+          </div>
+        }
+      >
+        <ctx.ui.SettingsRow
+          id="oem-updates-check"
+          title={ctx.t("updates.check")}
+          description={
+            <span class="oem-description">
+              <Show when={updateCheck()}>
+                <span class="oem-hint">
+                  {ctx.t("updates.checkedAt", {
+                    time: new Date(updateCheck()!.checkedAt).toLocaleString(ctx.locale.locale()),
+                  })}
+                </span>
+              </Show>
+              <Show when={checkError()}>
+                <span class="oem-error">
+                  {ctx.t("updates.checkFailed")}: {checkError()}
+                </span>
+              </Show>
+            </span>
+          }
+        >
+          <div class="oem-actions">
+            <ctx.ui.Button icon="refresh" size="small" busy={checking()} onClick={() => void runUpdateCheck()}>
+              {checking() ? ctx.t("updates.checking") : ctx.t("updates.check")}
+            </ctx.ui.Button>
+            <ctx.ui.Button
+              variant="contrast"
+              icon="download"
+              size="small"
+              busy={updatingAll()}
+              disabled={outdated().length === 0}
+              onClick={() => void updateAllOutdated()}
+            >
+              {updatingAll() ? ctx.t("updates.updating") : ctx.t("updates.updateAll")}
+            </ctx.ui.Button>
+          </div>
+        </ctx.ui.SettingsRow>
+
+        <Show when={!updateCheck() && !checking()}>
+          <ctx.ui.SettingsRow title={<span class="oem-muted">{ctx.t("updates.notChecked")}</span>} />
+        </Show>
+
+        <Show when={updateCheck() && outdated().length === 0 && updateProblems().length === 0}>
+          <ctx.ui.SettingsRow title={<span class="oem-hint">{ctx.t("updates.none")}</span>} />
+        </Show>
+
+        <For each={outdated()}>
+          {(item) => (
+            <ctx.ui.SettingsRow
+              id={`oem-update-${item.key}`}
+              title={
+                <span class="oem-title">
+                  <span>{item.displayName ?? item.plugin}</span>
+                  <span class="oem-badge">{item.marketplaceName}</span>
+                  <span class="oem-badge">{ctx.t("updates.outdated")}</span>
+                  <span class="oem-badge">{scopeLabel(item.scope)}</span>
+                </span>
+              }
+              description={
+                <span class="oem-description">
+                  <Show when={versionLine(item)}>
+                    <span class="oem-hint">{versionLine(item)}</span>
+                  </Show>
+                  <Show when={commitLine(item)}>
+                    <span class="oem-hint">{commitLine(item)}</span>
+                  </Show>
+                  <Show when={item.source}>
+                    <span class="oem-path">{item.source}</span>
+                  </Show>
+                  <Show when={item.project}>
+                    <span class="oem-path">{item.project}</span>
+                  </Show>
+                </span>
+              }
+            />
+          )}
+        </For>
+
+        <For each={updateProblems()}>
+          {(item) => (
+            <ctx.ui.SettingsRow
+              title={
+                <span class="oem-title">
+                  <span>{item.displayName ?? item.plugin}</span>
+                  <span class="oem-badge">{item.marketplaceName}</span>
+                </span>
+              }
+              description={
+                <span class="oem-description">
+                  <Show when={item.source}>
+                    <span class="oem-path">{item.source}</span>
+                  </Show>
+                  <Show when={item.error}>
+                    <span class="oem-error">{item.error}</span>
+                  </Show>
+                </span>
+              }
+            />
+          )}
+        </For>
+
+        <Show when={updateResults().length > 0}>
+          <ctx.ui.SettingsRow
+            title={ctx.t("updates.results")}
+            description={
+              <span class="oem-description">
+                <For each={updateResults()}>
+                  {(result) => (
+                    <>
+                      <span class={result.ok ? "oem-hint" : "oem-error"}>
+                        {result.ok
+                          ? result.skipped && result.skipped.length > 0
+                            ? ctx.t("updates.resultSkipped", {
+                                name: result.displayName ?? result.plugin,
+                                items: result.skipped.join("; "),
+                              })
+                            : ctx.t("updates.resultOk", { name: result.displayName ?? result.plugin })
+                          : ctx.t("updates.resultFailed", { name: result.displayName ?? result.plugin })}
+                      </span>
+                      <Show when={result.error}>
+                        <span class="oem-error">{result.error}</span>
+                      </Show>
+                    </>
+                  )}
+                </For>
+              </span>
+            }
+          />
         </Show>
       </ctx.ui.SettingsSection>
 

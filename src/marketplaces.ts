@@ -30,11 +30,13 @@ import {
   writeAtomic,
   type Mutation,
   type ScopePaths,
-} from "./config"
+} from "./config.ts"
 import type {
+  BatchUpdateResult,
   InstalledPlugin,
   MarketplaceInfo,
   MarketplacePlugin,
+  MarketplaceUpdate,
   PluginInspection,
   RepositoryInspection,
   RepositoryProposal,
@@ -46,6 +48,10 @@ import type {
 /* ---------------------------------------------------------------------------------------------- */
 
 export const DEFAULT_MARKETPLACE_URL = "https://github.com/anthropics/claude-plugins-official"
+
+/** Synthetic marketplace id for plugins imported from a Claude Code cache. */
+export const CLAUDE_IMPORT_MARKETPLACE = "claude-code"
+export const CLAUDE_IMPORT_MARKETPLACE_NAME = "Claude Code"
 
 export interface MarketplaceRecord {
   readonly id: string
@@ -461,6 +467,40 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, run: (item: T)
   return result
 }
 
+const commitCache = new Map<string, { at: number; sha?: string }>()
+const commitCacheTTL = 60 * 1000
+
+/**
+ * Resolves a branch or tag to the commit GitHub currently points at. Update checks store commit SHA
+ * values so a branch that moved can be detected even when the plugin does not bump its version.
+ */
+async function githubCommitSha(
+  owner: string,
+  repo: string,
+  ref: string,
+  force = false,
+): Promise<string | undefined> {
+  const key = `${owner}/${repo}@${ref}`
+  const cached = commitCache.get(key)
+  if (!force && cached && Date.now() - cached.at < commitCacheTTL) return cached.sha
+  try {
+    const data = await fetchJson<{ sha?: string }>(
+      `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}`,
+    )
+    const sha = typeof data.sha === "string" && data.sha.length > 0 ? data.sha : undefined
+    commitCache.set(key, { at: Date.now(), sha })
+    return sha
+  } catch {
+    // Version metadata still works when the GitHub API is rate-limited or offline.
+    commitCache.set(key, { at: Date.now(), sha: undefined })
+    return undefined
+  }
+}
+
+function isCommitSha(value: string | undefined): value is string {
+  return typeof value === "string" && /^[0-9a-f]{7,40}$/i.test(value)
+}
+
 /* ---------------------------------------------------------------------------------------------- */
 /* Marketplace manifests                                                                           */
 /* ---------------------------------------------------------------------------------------------- */
@@ -774,6 +814,7 @@ async function githubTree(location: PluginLocation, force = false): Promise<Tree
 
 export function clearTreeCache() {
   treeCache.clear()
+  commitCache.clear()
 }
 
 interface PluginFiles {
@@ -891,18 +932,18 @@ async function pluginFiles(location: PluginLocation, force = false, entry?: Mark
 /* Compatibility extraction                                                                        */
 /* ---------------------------------------------------------------------------------------------- */
 
-interface SkillSource {
+export interface SkillSource {
   readonly id: string
   readonly name: string
   readonly description?: string
   readonly content: string
 }
 
-interface SkillCandidate extends SkillSource {
+export interface SkillCandidate extends SkillSource {
   readonly reason?: string
 }
 
-interface Extracted {
+export interface Extracted {
   readonly mcp: readonly { name: string; config: Record<string, unknown> }[]
   readonly skills: readonly SkillSource[]
   readonly adaptable: readonly SkillCandidate[]
@@ -1174,6 +1215,19 @@ function extract(entry: MarketplacePluginRaw, files: PluginFiles): Extracted {
     ...(version ? { version } : {}),
     ...(description ? { description } : {}),
   }
+}
+
+/**
+ * Extracts compatible parts from a plugin folder that is already on disk, such as a Claude Code
+ * cache entry. It uses the same rules as marketplace inspection but does not require a marketplace
+ * manifest or a network connection.
+ */
+export async function inspectPluginFolder(folder: string): Promise<Extracted> {
+  const resolved = path.resolve(expandHome(folder))
+  if (!(await isDirectory(resolved))) throw new Error(`Plugin folder not found: ${resolved}`)
+  const location: PluginLocation = { kind: "local", localPath: resolved, sourceLabel: resolved }
+  const files = await readLocalPluginFiles(location, resolved)
+  return extract({}, files)
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -1626,38 +1680,47 @@ async function applyArtifacts(
   return { mcp: mcpNames, skills: skillIDs, plugins: pluginSpecs }
 }
 
-export async function installMarketplacePlugin(input: {
-  marketplace: string
-  plugin: string
-  scope: Scope
-  project?: string
-  update?: boolean
-  adapt?: boolean
-}): Promise<void> {
-  const { registry } = await readRegistry()
-  const record = findMarketplace(registry, input.marketplace)
-  if (!record) throw new Error(`Marketplace not found: ${input.marketplace}`)
-  const { loaded, entry, location, extracted } = await inspect(record, input.plugin, input.update === true)
+interface ExtractedInstallRequest {
+  readonly registry?: Registry
+  readonly marketplace: string
+  readonly marketplaceName: string
+  readonly plugin: string
+  readonly displayName?: string
+  readonly description?: string
+  readonly version?: string
+  readonly commit?: string
+  readonly scope: Scope
+  readonly project?: string
+  readonly extracted: Extracted
+  readonly adapt?: boolean
+}
+
+/**
+ * Applies extracted parts with the same snapshot, fingerprint, and registry commit point as a
+ * marketplace install. Used both by marketplace installs and by Claude Code cache imports.
+ */
+async function installExtracted(request: ExtractedInstallRequest): Promise<{ key: string; skipped: string[] }> {
+  const registry = request.registry ?? (await readRegistry()).registry
   // Scope is part of the key, so installing the same plugin globally and in a project produces two
   // independent records and two independent artifact sets.
-  const effectivePaths = await resolveScope(input.scope, input.project)
+  const effectivePaths = await resolveScope(request.scope, request.project)
   const key = installedKey(
-    record.id,
-    entry.name ?? input.plugin,
+    request.marketplace,
+    request.plugin,
     effectivePaths.scope,
     effectivePaths.scope === "project" ? effectivePaths.root : undefined,
   )
   const previous = registry.installed.find((item) => item.key === key)
-  const adapt = input.adapt ?? previous?.adapt ?? false
-  const skills = new Map(extracted.skills.map((skill) => [skill.id, skill]))
+  const adapt = request.adapt ?? previous?.adapt ?? false
+  const skills = new Map(request.extracted.skills.map((skill) => [skill.id, skill]))
   if (adapt) {
-    for (const candidate of extracted.adaptable) {
+    for (const candidate of request.extracted.adaptable) {
       if (skills.has(candidate.id)) continue
       skills.set(candidate.id, { ...candidate, content: adaptSkillContent(candidate) })
     }
   }
   const extractedSkills = [...skills.values()]
-  if (extracted.mcp.length === 0 && extractedSkills.length === 0 && extracted.plugins.length === 0) {
+  if (request.extracted.mcp.length === 0 && extractedSkills.length === 0 && request.extracted.plugins.length === 0) {
     throw new Error(
       "The plugin has no parts compatible with OpenCode (MCP servers, skills, or OpenCode plugins). " +
         "Claude Code commands, agents, hooks, and LSP are not supported.",
@@ -1665,14 +1728,15 @@ export async function installMarketplacePlugin(input: {
   }
 
   const enabled = previous?.enabled !== false
-  const pluginSlug = slug(entry.name ?? input.plugin)
+  const pluginSlug = slug(request.plugin)
   const snapshot = await createInstallSnapshot(effectivePaths, previous)
   let applied: AppliedArtifacts | undefined
+  let skipped: string[] = []
   try {
-    const skipped = previous ? await removeArtifacts(previous, effectivePaths, "update") : []
+    skipped = previous ? await removeArtifacts(previous, effectivePaths, "update") : []
     applied = await applyArtifacts(
       effectivePaths,
-      { ...extracted, skills: extractedSkills },
+      { ...request.extracted, skills: extractedSkills },
       pluginSlug,
       enabled,
     )
@@ -1680,23 +1744,23 @@ export async function installMarketplacePlugin(input: {
     const now = new Date().toISOString()
     const next: InstalledRecord = {
       key,
-      marketplace: record.id,
-      marketplaceName: loaded.record.name,
-      plugin: entry.name ?? input.plugin,
-      ...(entry.displayName ? { displayName: entry.displayName } : {}),
-      ...(extracted.description ? { description: extracted.description } : {}),
+      marketplace: request.marketplace,
+      marketplaceName: request.marketplaceName,
+      plugin: request.plugin,
+      ...(request.displayName ? { displayName: request.displayName } : {}),
+      ...(request.description ? { description: request.description } : {}),
       scope: effectivePaths.scope,
       ...(effectivePaths.scope === "project" ? { project: effectivePaths.root } : {}),
       enabled,
       ...(adapt ? { adapt: true } : {}),
       installedAt: previous?.installedAt ?? now,
       updatedAt: now,
-      ...(extracted.version ? { version: extracted.version } : {}),
-      ...(location.kind === "github" && location.ref ? { commit: location.ref } : {}),
+      ...(request.version ? { version: request.version } : {}),
+      ...(request.commit ? { commit: request.commit } : {}),
       mcp: applied.mcp,
       skills: applied.skills,
       plugins: applied.plugins,
-      unsupported: extracted.unsupported,
+      unsupported: request.extracted.unsupported,
       fingerprints,
       ...(skipped.length > 0 ? { skipped } : {}),
     }
@@ -1715,6 +1779,52 @@ export async function installMarketplacePlugin(input: {
   } finally {
     await rm(snapshot.workspace, { recursive: true, force: true }).catch(() => undefined)
   }
+  return { key, skipped }
+}
+
+export type InstallExtractedPluginInput = Omit<ExtractedInstallRequest, "registry">
+
+/** Installs parts extracted outside the marketplace flow, such as from a Claude Code cache. */
+export function installExtractedPlugin(input: InstallExtractedPluginInput): Promise<{ key: string; skipped: string[] }> {
+  return installExtracted(input)
+}
+
+async function sourceCommit(location: PluginLocation, force = false): Promise<string | undefined> {
+  if (location.kind !== "github" || !location.owner || !location.repo || !location.ref) return undefined
+  if (/^[0-9a-f]{40}$/i.test(location.ref)) return location.ref
+  // Store a commit SHA when GitHub resolves one, so later update checks can notice a moved branch.
+  return (await githubCommitSha(location.owner, location.repo, location.ref, force)) ?? location.ref
+}
+
+export async function installMarketplacePlugin(input: {
+  marketplace: string
+  plugin: string
+  scope: Scope
+  project?: string
+  update?: boolean
+  adapt?: boolean
+}): Promise<void> {
+  const { registry } = await readRegistry()
+  const record = findMarketplace(registry, input.marketplace)
+  if (!record) throw new Error(`Marketplace not found: ${input.marketplace}`)
+  const { loaded, entry, location, extracted } = await inspect(record, input.plugin, input.update === true)
+  // A forced inspect above already fetched the newest metadata; the commit cache is short-lived and
+  // reusing it avoids a second GitHub API call during a batch update.
+  const commit = await sourceCommit(location)
+  await installExtracted({
+    registry,
+    marketplace: record.id,
+    marketplaceName: loaded.record.name,
+    plugin: entry.name ?? input.plugin,
+    ...(entry.displayName ? { displayName: entry.displayName } : {}),
+    ...(extracted.description ? { description: extracted.description } : {}),
+    ...(extracted.version ? { version: extracted.version } : {}),
+    ...(commit ? { commit } : {}),
+    scope: input.scope,
+    ...(input.project ? { project: input.project } : {}),
+    extracted,
+    adapt: input.adapt,
+  })
 }
 
 export async function uninstallMarketplacePlugin(key: string): Promise<string[]> {
@@ -1842,6 +1952,146 @@ export async function updateMarketplacePlugin(key: string): Promise<void> {
     ...(record.project ? { project: record.project } : {}),
     update: true,
   })
+}
+
+function updateBase(record: InstalledRecord) {
+  return {
+    key: record.key,
+    marketplace: record.marketplace,
+    marketplaceName: record.marketplaceName,
+    plugin: record.plugin,
+    ...(record.displayName ? { displayName: record.displayName } : {}),
+    scope: record.scope,
+    ...(record.project ? { project: record.project } : {}),
+  }
+}
+
+/**
+ * Checks every installed marketplace plugin against its current source. Version changes are
+ * authoritative when the manifest or plugin.json carries a version; commit changes are reported
+ * when both the recorded and current values are real commit SHAs.
+ */
+export async function checkMarketplaceUpdates(): Promise<{ checkedAt: string; plugins: MarketplaceUpdate[] }> {
+  const { registry } = await readRegistry()
+  const marketplaceIDs = new Set(marketplaceRecords(registry).map((record) => record.id))
+  const installed = registry.installed.filter((record) => marketplaceIDs.has(record.marketplace))
+  const plugins = await mapLimit(installed, 4, async (record): Promise<MarketplaceUpdate> => {
+    const base = {
+      ...updateBase(record),
+      ...(record.version ? { currentVersion: record.version } : {}),
+      ...(record.commit ? { currentCommit: record.commit } : {}),
+    }
+    const marketplace = findMarketplace(registry, record.marketplace)
+    if (!marketplace) {
+      return {
+        ...base,
+        updateAvailable: false,
+        status: "skipped",
+        error: `Marketplace not found: ${record.marketplace}`,
+      }
+    }
+    try {
+      const { entry, location, extracted } = await inspect(marketplace, record.plugin, true)
+      const latestVersion = extracted.version ?? entry.version
+      const latestCommit = location.kind === "github" ? await sourceCommit(location, true) : undefined
+      const versionChanged = latestVersion !== undefined && latestVersion !== record.version
+      const commitChanged =
+        isCommitSha(record.commit) && isCommitSha(latestCommit) && record.commit !== latestCommit
+      const updateAvailable = versionChanged || commitChanged
+      return {
+        ...base,
+        ...(latestVersion ? { latestVersion } : {}),
+        ...(latestCommit ? { latestCommit } : {}),
+        source: location.sourceLabel,
+        updateAvailable,
+        status: updateAvailable ? "outdated" : "current",
+      }
+    } catch (error) {
+      return {
+        ...base,
+        updateAvailable: false,
+        status: "error",
+        error: message(error),
+      }
+    }
+  })
+  return { checkedAt: new Date().toISOString(), plugins }
+}
+
+/**
+ * Updates marketplace plugins one by one. A failure is recorded and the next plugin still runs, so
+ * one broken source cannot block the rest of the batch. Without `keys`, the batch first checks all
+ * installed marketplace plugins and updates only the outdated ones.
+ */
+export async function updateMarketplacePlugins(keys?: readonly string[]): Promise<BatchUpdateResult[]> {
+  const { registry } = await readRegistry()
+  const marketplaceIDs = new Set(marketplaceRecords(registry).map((record) => record.id))
+  const results: BatchUpdateResult[] = []
+  const targetKeys: string[] = []
+
+  if (keys && keys.length > 0) {
+    for (const key of [...new Set(keys)]) {
+      const record = registry.installed.find((item) => item.key === key)
+      if (!record) {
+        results.push({
+          key,
+          marketplace: "",
+          marketplaceName: "",
+          plugin: key,
+          scope: "global",
+          ok: false,
+          error: `Installed plugin not found: ${key}`,
+        })
+        continue
+      }
+      if (!marketplaceIDs.has(record.marketplace)) {
+        results.push({
+          ...updateBase(record),
+          ok: false,
+          error: `Not a marketplace plugin: ${record.marketplace}`,
+        })
+        continue
+      }
+      targetKeys.push(key)
+    }
+  } else {
+    const check = await checkMarketplaceUpdates()
+    targetKeys.push(...check.plugins.filter((item) => item.status === "outdated").map((item) => item.key))
+  }
+
+  for (const key of targetKeys) {
+    // Re-read for every item: a successful update rewrites the registry, and a failed one may have
+    // rolled its artifacts back.
+    const current = (await readRegistry()).registry.installed.find((item) => item.key === key)
+    if (!current) {
+      results.push({
+        key,
+        marketplace: "",
+        marketplaceName: "",
+        plugin: key,
+        scope: "global",
+        ok: false,
+        error: `Installed plugin not found: ${key}`,
+      })
+      continue
+    }
+    try {
+      await updateMarketplacePlugin(key)
+      const updated = (await readRegistry()).registry.installed.find((item) => item.key === key)
+      results.push({
+        ...updateBase(current),
+        ok: true,
+        ...(updated?.skipped && updated.skipped.length > 0 ? { skipped: [...updated.skipped] } : {}),
+      })
+    } catch (error) {
+      results.push({
+        ...updateBase(current),
+        ok: false,
+        error: message(error),
+      })
+    }
+  }
+  return results
 }
 
 export async function addMarketplace(url: string): Promise<{ record?: MarketplaceRecord; repository?: RepositoryInspection }> {
