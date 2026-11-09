@@ -43,11 +43,15 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
 - **Localization**
   - English, Russian, Chinese (Simplified), Chinese (Traditional), Spanish, French, German, Japanese, Korean, Italian, Polish, Turkish, and Ukrainian UI.
   - Other locales fall back to English.
-  - README translations exist for the linked languages; the additional UI languages are not translated yet.
+  - READMEs are available in English, Russian, Simplified Chinese, Spanish, French, German, and Japanese; the other UI languages are not translated yet.
 - **Automatic compatibility fixes**
   - Strips Claude-specific `?client=claude-…` parameters from remote MCP URLs.
   - Ignores docs such as `README.md` when scanning skills.
   - Can add minimal YAML frontmatter to skills that need it.
+- **Doctor**
+  - Checks invalid JSONC and parse errors, duplicate MCP names across scopes, duplicate plugin entries, invalid MCP and plugin entries, failed or sign-in-required MCP servers, missing config files, and missing or unreadable skills folders.
+  - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, and remove duplicate plugin entries with confirmation.
+  - Never rewrites configuration on its own.
 
 ## Requirements
 
@@ -181,6 +185,28 @@ The **Update center** checks every installed marketplace plugin against its mark
 
 Single-plugin updates from the installed list still work the same way.
 
+### Doctor
+
+**Doctor** checks the current configuration and reports problems without changing anything:
+
+- Invalid JSONC or parse errors, and unreadable config files.
+- Config files that have not been created yet.
+- MCP server names defined in both global and project scopes.
+- Duplicate plugin entries, and plugin entries that are not a package string or a package object.
+- MCP entries that are neither a local command nor a remote URL, including local entries without a command and remote entries without a URL.
+- MCP servers whose runtime status is failed or needs sign-in.
+- Missing or unreadable skills folders.
+
+Safe actions offered by Doctor:
+
+- **Run checks** refreshes the diagnostics.
+- **Show config file**, **Show config folder**, **Show skills folder**, and **Show project folder** reveal paths in the file manager.
+- **Retry** reconnects a failed MCP server.
+- **Sign in** copies `opencode mcp auth <server>` for servers that need authentication.
+- **Remove #N** removes a duplicate plugin entry through the manager's existing RPC, after confirmation and with a `.bak` backup.
+
+Doctor never rewrites configuration on its own. Fixes that require editing the config, such as duplicate MCP names across scopes, invalid entries, or skills folder permissions, are only reported for you to handle manually.
+
 ## MCP OAuth
 
 OpenCode performs the browser OAuth flow. The manager prepares the configuration and copies the command:
@@ -277,6 +303,7 @@ After changing GUI code, run `npm run build` and restart OpenCode Desktop. Serve
 - Claude Code commands, agents, hooks, and LSP servers are not supported by OpenCode.
 - GitHub API rate limits apply when fetching marketplace plugin trees. Trees are cached for five minutes.
 - Update checks use version metadata or resolved GitHub commit SHAs. A local marketplace that changes files without changing either is reported as current.
+- Doctor does not rewrite configuration on its own except for the explicit duplicate-plugin-entry removal action.
 - Skills are scanned one level deep: `<skillsDir>/<id>/SKILL.md` and `<skillsDir>/<id>.md`.
 - The OAuth browser flow is started by the OpenCode CLI, not by the manager.
 - Marketplace installations are always manual; nothing from the default catalog is installed automatically.

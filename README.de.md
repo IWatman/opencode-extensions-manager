@@ -43,11 +43,21 @@ Ein Desktop-GUI-Plugin für **OpenCode**, das eine Seite **Einstellungen → Erw
 - **Lokalisierung**
   - Oberfläche auf Englisch, Russisch, vereinfachtem und traditionellem Chinesisch, Spanisch, Französisch, Deutsch, Japanisch, Koreanisch, Italienisch, Polnisch, Türkisch und Ukrainisch.
   - Andere Sprachen verwenden Englisch als Fallback.
-  - Übersetzte READMEs gibt es für die verlinkten Sprachen; die zusätzlichen UI-Sprachen sind noch nicht übersetzt.
+  - Übersetzte READMEs gibt es für Englisch, Russisch, vereinfachtes Chinesisch, Spanisch, Französisch, Deutsch und Japanisch; die anderen UI-Sprachen sind noch nicht übersetzt.
 - **Automatische Kompatibilitätskorrekturen**
   - Entfernt Claude-spezifische `?client=claude-…`-Parameter aus entfernten MCP-URLs.
   - Ignoriert Dokumente wie `README.md` beim Scannen von Skills.
   - Kann Skills, denen es fehlt, ein minimales YAML-Frontmatter hinzufügen.
+- **Aus Claude Code importieren**
+  - Durchsucht den Plugin-Cache von Claude Code und zeigt eine Vorschau der MCP-Server, Skills, OpenCode-Plugins und nicht unterstützten Teile.
+  - Quellordner werden nur gelesen; der Import nutzt denselben transaktionalen Installationspfad und dieselben Eigentums-Fingerabdrücke wie Marktplatz-Plugins.
+- **Update-Center**
+  - Prüft alle installierten Marktplatz-Plugins gegen ihre Marktplatzquelle.
+  - Aktualisiert alle veralteten Plugins in einem Durchgang; ein Fehler stoppt die übrigen nicht, und die Ergebnisse werden pro Plugin angezeigt.
+- **Diagnose**
+  - Prüft ungültiges JSONC und Parse-Fehler, doppelte MCP-Namen über Bereiche hinweg, doppelte Plugin-Einträge, ungültige oder nicht lesbare MCP- und Plugin-Einträge, fehlgeschlagene MCP-Server oder solche mit Anmeldebedarf, fehlende Konfigurationsdateien sowie fehlende oder nicht lesbare Skill-Ordner.
+  - Bietet nur sichere Aktionen: Prüfungen starten, Pfade anzeigen, fehlgeschlagene MCP-Server erneut versuchen, Anmeldebefehle kopieren und doppelte Plugin-Einträge nach Bestätigung entfernen.
+  - Schreibt die Konfiguration nie von selbst um.
 
 ## Voraussetzungen
 
@@ -160,6 +170,49 @@ Marktplatz-Metadaten und Installationsdatensätze werden gespeichert unter:
 
 Beim Deinstallieren eines Marktplatz-Plugins werden nur die MCP-Server, Skills und Plugin-Einträge entfernt, die der Manager hinzugefügt hat.
 
+### Aus Claude Code importieren
+
+Der Manager kann den Plugin-Cache von Claude Code (`~/.claude/plugins/cache` oder `$CLAUDE_CONFIG_DIR/plugins/cache`) durchsuchen und kompatible Teile in der Vorschau anzeigen, bevor etwas installiert wird.
+
+1. **Aus Claude Code importieren** öffnen. Der Abschnitt durchsucht den Cache beim Öffnen; **Erneut durchsuchen** aktualisiert die Liste.
+2. Jedes zwischengespeicherte Plugin prüfen: MCP-Server, Skills, OpenCode-Plugins und nicht unterstützte Claude Code-Teile. Für jeden Kandidaten wird der Quellpfad angezeigt.
+3. Die zu importierenden Plugins auswählen und bestätigen. Quellordner werden nur gelesen.
+4. Optional: **Skills ohne Frontmatter anpassen** aktivieren, um Skills, die es benötigen, ein minimales YAML-Frontmatter hinzuzufügen.
+
+Importe nutzen denselben transaktionalen Installationspfad und dieselben Eigentums-Fingerabdrücke wie Marktplatz-Plugins. Deinstallieren und Deaktivieren entfernen daher nur Artefakte, die noch dem installierten Stand entsprechen.
+
+### Update-Center
+
+Das **Update-Center** prüft alle installierten Marktplatz-Plugins gegen ihre Marktplatzquelle.
+
+1. **Nach Updates suchen** anklicken.
+2. Veraltete Plugins mit ihren aktuellen und neuesten Versionen oder Commits prüfen, sofern verfügbar.
+3. **Alle veralteten aktualisieren** anklicken, um sie in einem Durchgang zu aktualisieren. Jedes Plugin wird unabhängig aktualisiert; ein Fehler stoppt die übrigen nicht, und die Ergebnisse pro Plugin zeigen Erfolge, Fehler und beibehaltene Artefakte, die nicht mehr zum Installations-Fingerabdruck passen.
+
+Einzelne Updates aus der Liste der installierten Plugins funktionieren weiterhin wie bisher.
+
+### Diagnose
+
+**Diagnose** prüft die aktuelle Konfiguration und meldet Probleme, ohne etwas zu ändern:
+
+- Ungültiges JSONC oder Parse-Fehler sowie nicht lesbare Konfigurationsdateien.
+- Konfigurationsdateien, die noch nicht erstellt wurden.
+- MCP-Servernamen, die sowohl im globalen als auch im Projekt-Bereich definiert sind.
+- Doppelte Plugin-Einträge sowie Plugin-Einträge, die weder ein Paket-String noch ein Paketobjekt sind.
+- MCP-Einträge, die weder ein lokaler Befehl noch eine entfernte URL sind, einschließlich lokaler Einträge ohne Befehl und entfernter Einträge ohne URL.
+- MCP-Server, deren Laufzeitstatus fehlgeschlagen ist oder die eine Anmeldung erfordern.
+- Fehlende oder nicht lesbare Skill-Ordner.
+
+Sichere Aktionen der Diagnose:
+
+- **Prüfungen starten** aktualisiert die Diagnose.
+- **Konfigurationsdatei anzeigen**, **Konfigurationsordner anzeigen**, **Skill-Ordner anzeigen** und **Projektordner anzeigen** öffnen die Pfade im Dateimanager.
+- **Erneut versuchen** verbindet einen fehlgeschlagenen MCP-Server erneut.
+- **Anmelden** kopiert `opencode mcp auth <server>` für Server, die eine Authentifizierung benötigen.
+- **#N entfernen** entfernt einen doppelten Plugin-Eintrag über die vorhandene RPC des Managers, nach Bestätigung und mit einer `.bak`-Sicherung.
+
+Die Diagnose schreibt die Konfiguration nie von selbst um. Korrekturen, die eine Bearbeitung der Konfiguration erfordern, etwa doppelte MCP-Namen über Bereiche hinweg, ungültige Einträge oder Berechtigungen des Skill-Ordners, werden nur gemeldet und müssen manuell erledigt werden.
+
 ## MCP-OAuth
 
 OpenCode führt den OAuth-Browserablauf aus. Der Manager bereitet die Konfiguration vor und kopiert den Befehl:
@@ -254,6 +307,8 @@ Nach Änderungen am GUI-Code `npm run build` ausführen und OpenCode Desktop neu
 - Entwickelt für OpenCode 2.2.x und seine experimentelle GUI-API.
 - Claude-Code-Befehle, -Agenten, -Hooks und -LSP-Server werden von OpenCode nicht unterstützt.
 - Beim Abrufen von Plugin-Bäumen aus Marktplätzen gelten GitHub-API-Ratenlimits. Bäume werden fünf Minuten lang zwischengespeichert.
+- Update-Prüfungen verwenden Versionsmetadaten oder aufgelöste GitHub-Commit-SHAs. Ein lokaler Marktplatz, der Dateien ändert, ohne eines von beiden zu ändern, wird als aktuell gemeldet.
+- Die Diagnose schreibt die Konfiguration nicht von selbst um, außer bei der ausdrücklichen Aktion zum Entfernen eines doppelten Plugin-Eintrags.
 - Skills werden eine Ebene tief gescannt: `<skillsDir>/<id>/SKILL.md` und `<skillsDir>/<id>.md`.
 - Der OAuth-Browserablauf wird von der OpenCode-CLI gestartet, nicht vom Manager.
 - Marktplatz-Installationen sind immer manuell; nichts aus dem Standardkatalog wird automatisch installiert.
