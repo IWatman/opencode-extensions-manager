@@ -43,11 +43,21 @@ Plugin GUI de bureau pour **OpenCode** qui ajoute une page **Paramètres → Ges
 - **Localisation**
   - Interface en anglais, russe, chinois simplifié et traditionnel, espagnol, français, allemand, japonais, coréen, italien, polonais, turc et ukrainien.
   - Les autres langues utilisent l’anglais en secours.
-  - Les README traduits existent pour les langues liées ; les langues d’interface supplémentaires ne sont pas encore traduites.
+  - Les README traduits existent pour l’anglais, le russe, le chinois simplifié, l’espagnol, le français, l’allemand et le japonais ; les autres langues d’interface ne sont pas encore traduites.
 - **Corrections de compatibilité automatiques**
   - Supprime les paramètres `?client=claude-…` propres à Claude des URL MCP distantes.
   - Ignore les documents comme `README.md` lors de l’analyse des skills.
   - Peut ajouter un frontmatter YAML minimal aux skills qui en ont besoin.
+- **Importer depuis Claude Code**
+  - Analyse le cache de plugins de Claude Code et prévisualise les serveurs MCP, skills, plugins OpenCode et parties non prises en charge.
+  - Les dossiers sources sont uniquement lus ; l’import utilise le même chemin d’installation transactionnel et les mêmes empreintes de propriété que les plugins de place de marché.
+- **Centre de mises à jour**
+  - Vérifie tous les plugins de place de marché installés par rapport à leur source.
+  - Met à jour en lot tous les plugins obsolètes ; un échec n’interrompt pas les autres et les résultats sont affichés par plugin.
+- **Diagnostic**
+  - Vérifie le JSONC invalide et les erreurs d’analyse, les noms MCP en double entre portées, les entrées de plugin en double, les entrées MCP et de plugin invalides ou illisibles, les serveurs MCP en échec ou nécessitant une connexion, les fichiers de configuration manquants et les dossiers de skills manquants ou illisibles.
+  - Ne propose que des actions sûres : lancer les vérifications, révéler les chemins, réessayer les serveurs MCP en échec, copier les commandes de connexion et supprimer les entrées de plugin en double avec confirmation.
+  - Ne réécrit jamais la configuration de lui-même.
 
 ## Prérequis
 
@@ -160,6 +170,49 @@ Les métadonnées des places de marché et les enregistrements d’installation 
 
 La désinstallation d’un plugin de place de marché ne supprime que les serveurs MCP, skills et entrées de plugins ajoutés par le gestionnaire.
 
+### Importer depuis Claude Code
+
+Le gestionnaire peut analyser le cache de plugins de Claude Code (`~/.claude/plugins/cache`, ou `$CLAUDE_CONFIG_DIR/plugins/cache`) et prévisualiser les parties compatibles avant toute installation.
+
+1. Ouvrez **Importer depuis Claude Code**. La section analyse le cache à l’ouverture ; cliquez sur **Analyser à nouveau** pour actualiser.
+2. Examinez chaque plugin en cache : serveurs MCP, skills, plugins OpenCode et parties de Claude Code non prises en charge. Le chemin source est affiché pour chaque candidat.
+3. Sélectionnez les plugins à importer et confirmez. Les dossiers sources sont uniquement lus.
+4. Facultatif : activez **Adapter les skills sans frontmatter** pour ajouter un frontmatter YAML minimal aux skills qui en ont besoin.
+
+Les imports utilisent le même chemin d’installation transactionnel et les mêmes empreintes de propriété que les plugins de place de marché ; la désinstallation et la désactivation ne retirent donc que les artefacts qui correspondent encore à ce qui a été installé.
+
+### Centre de mises à jour
+
+Le **Centre de mises à jour** vérifie tous les plugins de place de marché installés par rapport à leur source.
+
+1. Cliquez sur **Rechercher des mises à jour**.
+2. Examinez les plugins obsolètes avec leurs versions ou commits actuels et les plus récents lorsqu’ils sont disponibles.
+3. Cliquez sur **Mettre à jour tous les obsolètes** pour lancer un lot. Chaque plugin est mis à jour indépendamment ; un échec n’arrête pas les autres, et les résultats par plugin indiquent les réussites, les échecs et les artefacts conservés parce qu’ils ne correspondent plus à l’empreinte d’installation.
+
+Les mises à jour individuelles depuis la liste des plugins installés fonctionnent toujours de la même manière.
+
+### Diagnostic
+
+**Diagnostic** examine la configuration actuelle et signale les problèmes sans rien modifier :
+
+- JSONC invalide ou erreurs d’analyse, et fichiers de configuration illisibles.
+- Fichiers de configuration pas encore créés.
+- Noms de serveurs MCP définis à la fois dans la portée globale et dans la portée projet.
+- Entrées de plugin en double et entrées de plugin qui ne sont ni une chaîne de paquet ni un objet de paquet.
+- Entrées MCP qui ne sont ni une commande locale ni une URL distante, y compris les entrées locales sans commande et les entrées distantes sans URL.
+- Serveurs MCP dont le statut d’exécution est en échec ou nécessite une connexion.
+- Dossiers de skills manquants ou illisibles.
+
+Actions sûres proposées par Diagnostic :
+
+- **Lancer les vérifications** actualise le diagnostic.
+- **Afficher le fichier de configuration**, **Afficher le dossier de configuration**, **Afficher le dossier des skills** et **Afficher le dossier du projet** ouvrent les chemins dans le gestionnaire de fichiers.
+- **Réessayer** reconnecte un serveur MCP en échec.
+- **Se connecter** copie `opencode mcp auth <server>` pour les serveurs qui nécessitent une authentification.
+- **Supprimer #N** supprime une entrée de plugin en double via le RPC existant du gestionnaire, après confirmation et avec une sauvegarde `.bak`.
+
+Diagnostic ne réécrit jamais la configuration de lui-même. Les corrections qui nécessitent de modifier la configuration, comme les noms MCP en double entre portées, les entrées invalides ou les permissions du dossier de skills, sont seulement signalées pour que vous les traitiez manuellement.
+
 ## OAuth MCP
 
 OpenCode effectue le flux OAuth dans le navigateur. Le gestionnaire prépare la configuration et copie la commande :
@@ -254,6 +307,8 @@ Après une modification du code GUI, exécutez `npm run build` et redémarrez Op
 - Conçu pour OpenCode 2.2.x et son API GUI expérimentale.
 - Les commandes, agents, hooks et serveurs LSP de Claude Code ne sont pas pris en charge par OpenCode.
 - Les limites de l’API GitHub s’appliquent lors de la récupération des arbres de plugins. Les arbres sont mis en cache cinq minutes.
+- Les vérifications de mise à jour utilisent les métadonnées de version ou les SHA de commit GitHub résolus ; une place de marché locale qui modifie des fichiers sans changer ni l’un ni l’autre est signalée comme à jour.
+- Le diagnostic ne réécrit pas la configuration de lui-même, sauf pour l’action explicite de suppression d’une entrée de plugin en double.
 - Les skills sont analysés sur un seul niveau : `<skillsDir>/<id>/SKILL.md` et `<skillsDir>/<id>.md`.
 - Le flux OAuth navigateur est lancé par la CLI OpenCode, pas par le gestionnaire.
 - Les installations depuis les places de marché sont toujours manuelles ; rien du catalogue par défaut n’est installé automatiquement.
