@@ -1,0 +1,289 @@
+import { Plugin } from "@opencode/plugin"
+import {
+  listMcp,
+  listPlugins,
+  listSkills,
+  readScope,
+  removeMcp,
+  removePlugin,
+  removeSkill,
+  resolveScope,
+  saveMcp,
+  savePlugin,
+  saveSkill,
+  setMcpEnabled,
+  setSkillEnabled,
+  withWriteLock,
+  type ScopePaths,
+} from "./config"
+import {
+  ManagerRpc,
+  type Diagnostic,
+  type InstalledPlugin,
+  type ManagerState,
+  type MarketplaceInfo,
+  type McpEntry,
+  type PluginEntry,
+  type Scope,
+  type ScopeInfo,
+  type SkillEntry,
+} from "./rpc"
+import {
+  addMarketplace,
+  getCatalog,
+  inspectMarketplacePlugin,
+  inspectRepository,
+  installMarketplacePlugin,
+  installRepository,
+  installedRecords,
+  listMarketplaces,
+  marketplaceInfo,
+  marketplaceRecords,
+  normalizeInstalledMcpUrls,
+  normalizeMcpUrls,
+  readRegistry,
+  removeMarketplace,
+  setMarketplacePluginEnabled,
+  uninstallMarketplacePlugin,
+  updateMarketplacePlugin,
+} from "./marketplaces"
+
+function message(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+interface StateBuilder {
+  global: ScopeInfo
+  project?: ScopeInfo
+  projectError?: string
+  mcp: McpEntry[]
+  plugins: PluginEntry[]
+  skills: SkillEntry[]
+  diagnostics: Diagnostic[]
+  marketplaces: MarketplaceInfo[]
+  installedPlugins: InstalledPlugin[]
+  marketplaceError?: string
+}
+
+export default Plugin.define({
+  id: "opencode-extensions-manager",
+  async setup(ctx) {
+    const defaultProject = () => ctx.location.directory
+
+    const scopePaths = (scope: Scope, project?: string) =>
+      resolveScope(scope, project?.trim() || defaultProject())
+
+    const collect = async (
+      paths: ScopePaths,
+      document: Awaited<ReturnType<typeof readScope>>,
+      scope: Scope,
+      result: StateBuilder,
+    ) => {
+      for (const error of document.errors) {
+        result.diagnostics.push({ scope, message: `${paths.configPath}: ${error}` })
+      }
+      for (const server of listMcp(document.data)) {
+        result.mcp.push({ scope, name: server.name, config: server.config })
+      }
+      for (const plugin of listPlugins(document.data)) {
+        result.plugins.push({ scope, ...plugin })
+      }
+      try {
+        for (const skill of await listSkills(paths.skillsDir)) {
+          result.skills.push({ scope, ...skill })
+        }
+      } catch (error) {
+        result.diagnostics.push({ scope, message: `${paths.skillsDir}: ${message(error)}` })
+      }
+    }
+
+    const buildState = async (project?: string): Promise<ManagerState> => {
+      const globalPaths = await resolveScope("global")
+      const globalDocument = await readScope(globalPaths)
+      const registryResult = await readRegistry()
+      const result: StateBuilder = {
+        global: {
+          root: globalPaths.root,
+          configDir: globalPaths.configDir,
+          configPath: globalPaths.configPath,
+          configExists: globalPaths.configExists,
+          skillsDir: globalPaths.skillsDir,
+        },
+        mcp: [],
+        plugins: [],
+        skills: [],
+        diagnostics: [],
+        marketplaces: marketplaceRecords(registryResult.registry).map((record) => marketplaceInfo(record)),
+        installedPlugins: installedRecords(registryResult.registry),
+      }
+
+      if (registryResult.error) {
+        result.marketplaceError = registryResult.error
+        result.diagnostics.push({ scope: "global", message: `Реестр маркетплейсов: ${registryResult.error}` })
+      }
+
+      await collect(globalPaths, globalDocument, "global", result)
+
+      try {
+        const projectPaths = await scopePaths("project", project)
+        const projectDocument = await readScope(projectPaths)
+        result.project = {
+          root: projectPaths.root,
+          configDir: projectPaths.configDir,
+          configPath: projectPaths.configPath,
+          configExists: projectPaths.configExists,
+          skillsDir: projectPaths.skillsDir,
+        }
+        await collect(projectPaths, projectDocument, "project", result)
+      } catch (error) {
+        result.projectError = message(error)
+      }
+
+      return result
+    }
+
+    await ctx.rpc.register(ManagerRpc, {
+      state: (input) => buildState(input.project),
+
+      saveMcp: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await saveMcp(paths, {
+            name: input.name,
+            ...(input.originalName === undefined ? {} : { originalName: input.originalName }),
+            config: input.config,
+          })
+          return buildState(input.project)
+        }),
+
+      removeMcp: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await removeMcp(paths, input.name)
+          return buildState(input.project)
+        }),
+
+      setMcpEnabled: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await setMcpEnabled(paths, input.name, input.enabled)
+          return buildState(input.project)
+        }),
+
+      savePlugin: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await savePlugin(paths, {
+            ...(input.index === undefined ? {} : { index: input.index }),
+            package: input.package,
+            ...(input.options === undefined ? {} : { options: input.options }),
+          })
+          return buildState(input.project)
+        }),
+
+      removePlugin: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await removePlugin(paths, input.index)
+          return buildState(input.project)
+        }),
+
+      saveSkill: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await saveSkill(paths, {
+            id: input.id,
+            ...(input.originalId === undefined ? {} : { originalId: input.originalId }),
+            content: input.content,
+          })
+          return buildState(input.project)
+        }),
+
+      removeSkill: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await removeSkill(paths, input.id)
+          return buildState(input.project)
+        }),
+
+      setSkillEnabled: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await setSkillEnabled(paths, input.id, input.enabled)
+          return buildState(input.project)
+        }),
+
+      marketplaces: async (input) => ({ marketplaces: await listMarketplaces(input.refresh === true) }),
+
+      catalog: async (input) => ({ plugins: await getCatalog(input.marketplace, input.refresh === true) }),
+
+      addMarketplace: (input) =>
+        withWriteLock(async () => {
+          const added = await addMarketplace(input.url)
+          const state = await buildState(input.project)
+          if (added.repository) {
+            return { kind: "repository" as const, repository: added.repository, state }
+          }
+          return {
+            kind: "marketplace" as const,
+            ...(added.record ? { marketplace: marketplaceInfo(added.record) } : {}),
+            state,
+          }
+        }),
+
+      removeMarketplace: (input) =>
+        withWriteLock(async () => {
+          await removeMarketplace(input.marketplace)
+          return buildState(input.project)
+        }),
+
+      inspectMarketplacePlugin: (input) => inspectMarketplacePlugin(input.marketplace, input.plugin),
+
+      installMarketplacePlugin: (input) =>
+        withWriteLock(async () => {
+          await installMarketplacePlugin(input)
+          return buildState(input.project)
+        }),
+
+      uninstallMarketplacePlugin: (input) =>
+        withWriteLock(async () => {
+          await uninstallMarketplacePlugin(input.key)
+          return buildState(input.project)
+        }),
+
+      setMarketplacePluginEnabled: (input) =>
+        withWriteLock(async () => {
+          await setMarketplacePluginEnabled(input.key, input.enabled)
+          return buildState(input.project)
+        }),
+
+      updateMarketplacePlugin: (input) =>
+        withWriteLock(async () => {
+          await updateMarketplacePlugin(input.key)
+          return buildState(input.project)
+        }),
+
+      inspectRepository: (input) => inspectRepository(input.url),
+
+      installRepository: (input) =>
+        withWriteLock(async () => {
+          await installRepository(input.proposal, input.scope, input.project)
+          return buildState(input.project)
+        }),
+    })
+
+    await withWriteLock(async () => {
+      try {
+        await normalizeMcpUrls(await resolveScope("global"))
+      } catch {
+        // A broken or missing global config must not block plugin activation.
+      }
+      try {
+        await normalizeMcpUrls(await scopePaths("project", defaultProject()))
+      } catch {
+        // No project or no readable project config.
+      }
+      await normalizeInstalledMcpUrls()
+    })
+  },
+})

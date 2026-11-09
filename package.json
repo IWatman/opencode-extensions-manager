@@ -1,0 +1,62 @@
+{
+  "name": "opencode-extensions-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode Desktop settings page for managing MCP servers, plugins, skills, and plugin marketplaces",
+  "license": "MIT",
+  "author": "IWatman",
+  "homepage": "https://github.com/IWatman/opencode-extensions-manager#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IWatman/opencode-extensions-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IWatman/opencode-extensions-manager/issues"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "mcp",
+    "model-context-protocol",
+    "skills",
+    "marketplace",
+    "gui",
+    "desktop"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./rpc": "./src/rpc.ts",
+    "./gui-experimental": "./dist/gui-experimental.cjs"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node --experimental-strip-types scripts/smoke.ts",
+    "smoke:marketplace": "node scripts/run-marketplace-smoke.mjs"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": "^2.2.6",
+    "effect": "^4.1.0"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "^2.2.6",
+    "@types/node": "^24.0.0",
+    "effect": "^4.1.0",
+    "solid-js": "^1.9.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vite-plugin-solid": "^2.11.0"
+  }
+}
