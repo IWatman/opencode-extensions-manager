@@ -1,4 +1,9 @@
 import type { Catalog } from "@opencode/plugin/gui"
+import { de } from "./locales/de"
+import { es } from "./locales/es"
+import { fr } from "./locales/fr"
+import { ja } from "./locales/ja"
+import { zh } from "./locales/zh"
 
 export const catalog: Catalog = {
   en: {
@@ -408,4 +413,9 @@ export const catalog: Catalog = {
     "footer.note":
       "OpenCode следит за этими файлами и перезагружает расширения после изменений. Если плагин продолжает работать по-старому, перезапустите приложение.",
   },
+  zh,
+  es,
+  fr,
+  de,
+  ja,
 }

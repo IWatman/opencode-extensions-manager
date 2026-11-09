@@ -41,7 +41,8 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - `.bak` backup before every change.
   - Invalid JSONC blocks writes instead of corrupting the file.
 - **Localization**
-  - Russian and English UI.
+  - English, Russian, Chinese (Simplified), Spanish, French, German, and Japanese UI.
+  - Other locales fall back to English.
 - **Automatic compatibility fixes**
   - Strips Claude-specific `?client=claude-…` parameters from remote MCP URLs.
   - Ignores docs such as `README.md` when scanning skills.
