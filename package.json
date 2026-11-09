@@ -25,7 +25,7 @@
     "desktop"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -40,8 +40,9 @@
     "build": "vite build",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run check:i18n && npm run smoke",
+    "test:unit": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "test": "npm run check:i18n",
     "smoke": "node --experimental-strip-types scripts/smoke.ts",
     "smoke:marketplace": "node scripts/run-marketplace-smoke.mjs"
   },

@@ -52,7 +52,7 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
 ## Requirements
 
 - **OpenCode Desktop 2.2.x**
-- **Node.js 22+** (only for building or running from source)
+- **Node.js 22.19+** (only for building or running from source; `@effect/platform-node` and `undici` require 22.19 or newer)
 - Windows, macOS, or Linux
 
 ## Installation
@@ -241,6 +241,7 @@ If both `opencode.json` and `opencode.jsonc` exist, the manager edits `opencode.
 ```bash
 npm install
 npm run typecheck          # TypeScript checks
+npm test                   # Unit tests, i18n parity, and smoke tests
 npm run smoke              # Config, MCP, plugins, skills
 npm run smoke:marketplace  # Local marketplace install/update/remove
 npm run build              # Production GUI bundle
@@ -261,7 +262,7 @@ After changing GUI code, run `npm run build` and restart OpenCode Desktop. Serve
 
 ## Contributing
 
-Issues and pull requests are welcome. Please run `npm run typecheck`, `npm run smoke`, and `npm run smoke:marketplace` before submitting a PR.
+Issues and pull requests are welcome. Please run `npm test`, `npm run typecheck`, and `npm run smoke:marketplace` before submitting a PR.
 
 ## License
 
