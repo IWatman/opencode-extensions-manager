@@ -1274,7 +1274,7 @@ export async function installMarketplacePlugin(input: {
   const extractedSkills = [...skills.values()]
   if (extracted.mcp.length === 0 && extractedSkills.length === 0 && extracted.plugins.length === 0) {
     throw new Error(
-      "Плагин не содержит частей, совместимых с OpenCode (MCP-серверы или навыки). " +
+      "Плагин не содержит частей, совместимых с OpenCode (MCP-серверы, навыки или OpenCode-плагины). " +
         "Команды, агенты, хуки и LSP из Claude Code не поддерживаются.",
     )
   }

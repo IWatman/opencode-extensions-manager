@@ -33,7 +33,13 @@ export function splitCommand(input: string): string[] {
 
   for (const character of input) {
     if (escaped) {
-      current += character
+      // A backslash only escapes characters a shell treats specially. Keep it before ordinary
+      // characters, so Windows paths such as C:\work survive instead of becoming C:work.
+      if (character === "\\" || character === '"' || character === "'" || /\s/.test(character)) {
+        current += character
+      } else {
+        current += `\\${character}`
+      }
       escaped = false
       started = true
       continue

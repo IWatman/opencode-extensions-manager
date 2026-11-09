@@ -9,6 +9,7 @@ import {
   mcpSummary,
   mcpType,
   parsePairs,
+  quoteArgument,
   runtimeStatus,
   type GuiContext,
   type RuntimeStatus,
@@ -96,7 +97,7 @@ export function McpSection(props: {
   }
 
   const copyLogin = async (entry: McpEntry) => {
-    const command = `opencode mcp auth ${entry.name}`
+    const command = `opencode mcp auth ${quoteArgument(entry.name)}`
     try {
       await ctx.system.copy(command)
       ctx.toast.show({
@@ -258,7 +259,7 @@ function McpDialog(props: {
   const copyLogin = async () => {
     const server = name().trim()
     if (!server) return
-    const command = `opencode mcp auth ${server}`
+    const command = `opencode mcp auth ${quoteArgument(server)}`
     try {
       await ctx.system.copy(command)
       ctx.toast.show({
@@ -314,7 +315,8 @@ function McpDialog(props: {
           const port = oauthCallbackPort().trim()
           if (port) {
             const parsed = Number(port)
-            if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(ctx.t("mcp.oauthPortInvalid"))
+            if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535)
+              throw new Error(ctx.t("mcp.oauthPortInvalid"))
             oauth.callback_port = parsed
           } else {
             delete oauth.callback_port

@@ -270,8 +270,11 @@ export function validateMcpConfig(input: unknown): Record<string, unknown> {
         }
       }
       const port = input.oauth.callback_port
-      if (port !== undefined && (typeof port !== "number" || !Number.isInteger(port) || port <= 0)) {
-        throw new Error("oauth.callback_port must be a positive integer")
+      if (
+        port !== undefined &&
+        (typeof port !== "number" || !Number.isInteger(port) || port <= 0 || port > 65535)
+      ) {
+        throw new Error("oauth.callback_port must be an integer between 1 and 65535")
       }
     }
   }
@@ -321,11 +324,25 @@ export async function saveMcp(
       throw new Error(`MCP server "${name}" already exists`)
     }
     const existing = servers[originalName ?? name]
-    const mutations: Mutation[] = [
-      { path: ["mcp", "servers", name], value: mergeMcpConfig(existing, config, removals) },
-    ]
+    const merged = mergeMcpConfig(existing, config, removals)
     if (originalName !== undefined && originalName !== name) {
-      mutations.push({ path: ["mcp", "servers", originalName], value: undefined })
+      return [
+        { path: ["mcp", "servers", originalName], value: undefined },
+        { path: ["mcp", "servers", name], value: merged },
+      ]
+    }
+    if (!isRecord(existing) || existing.type !== config.type) {
+      return [{ path: ["mcp", "servers", name], value: merged }]
+    }
+    // Patch the fields instead of replacing the object, so comments and formatting inside it survive where possible.
+    const mutations: Mutation[] = Object.entries(merged).map(([key, value]) => ({
+      path: ["mcp", "servers", name, key],
+      value,
+    }))
+    for (const key of Object.keys(existing)) {
+      if (!Object.hasOwn(merged, key)) {
+        mutations.push({ path: ["mcp", "servers", name, key], value: undefined })
+      }
     }
     return mutations
   })
@@ -344,10 +361,8 @@ export async function setMcpEnabled(paths: ScopePaths, name: string, enabled: bo
   await updateScope(paths, (data) => {
     const existing = mcpServers(data)[name]
     if (!isRecord(existing)) throw new Error(`MCP server not found: ${name}`)
-    const next = { ...existing }
-    if (enabled) delete next.disabled
-    else next.disabled = true
-    return [{ path: ["mcp", "servers", name], value: next }]
+    // Edit the single field instead of replacing the object, so comments inside it survive.
+    return [{ path: ["mcp", "servers", name, "disabled"], value: enabled ? undefined : true }]
   })
 }
 
@@ -405,27 +420,25 @@ export async function savePlugin(
   const entry = options === undefined ? target : { package: target, options }
 
   await updateScope(paths, (data) => {
-    const plugins = Array.isArray(data.plugins) ? [...data.plugins] : []
+    if (!Array.isArray(data.plugins)) return [{ path: ["plugins"], value: [entry] }]
     if (input.index === undefined) {
-      plugins.push(entry)
-    } else {
-      if (!Number.isInteger(input.index) || input.index < 0 || input.index >= plugins.length) {
-        throw new Error("Plugin entry no longer exists, refresh the page")
-      }
-      plugins[input.index] = entry
+      // Append at the array's current length instead of replacing the array, so comments inside it survive.
+      return [{ path: ["plugins", data.plugins.length], value: entry }]
     }
-    return [{ path: ["plugins"], value: plugins }]
+    if (!Number.isInteger(input.index) || input.index < 0 || input.index >= data.plugins.length) {
+      throw new Error("Plugin entry no longer exists, refresh the page")
+    }
+    return [{ path: ["plugins", input.index], value: entry }]
   })
 }
 
 export async function removePlugin(paths: ScopePaths, index: number) {
   await updateScope(paths, (data) => {
-    const plugins = Array.isArray(data.plugins) ? [...data.plugins] : []
+    const plugins = Array.isArray(data.plugins) ? data.plugins : []
     if (!Number.isInteger(index) || index < 0 || index >= plugins.length) {
       throw new Error("Plugin entry no longer exists, refresh the page")
     }
-    plugins.splice(index, 1)
-    return [{ path: ["plugins"], value: plugins }]
+    return [{ path: ["plugins", index], value: undefined }]
   })
 }
 
@@ -443,10 +456,11 @@ export function hasPlugin(paths: ScopeDocument, target: string) {
 /** Removes every `plugins` entry whose package or path equals `target`. */
 export async function removePluginPackage(paths: ScopePaths, target: string) {
   await updateScope(paths, (data) => {
-    const plugins = Array.isArray(data.plugins) ? [...data.plugins] : []
-    const next = plugins.filter((entry) => pluginTarget(entry) !== target)
-    if (next.length === plugins.length) return []
-    return [{ path: ["plugins"], value: next }]
+    if (!Array.isArray(data.plugins)) return []
+    // Remove from the end so earlier indices stay valid while the edits are applied in order.
+    return data.plugins
+      .flatMap((entry, index) => (pluginTarget(entry) === target ? [{ path: ["plugins", index], value: undefined }] : []))
+      .reverse()
   })
 }
 

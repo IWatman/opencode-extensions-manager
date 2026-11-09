@@ -20,7 +20,8 @@ export function ExtensionsPage(props: { ctx: GuiContext }) {
 
   const loadStatuses = async () => {
     try {
-      const path = project()?.trim()
+      // Runtime status is per Location. Global entries must not inherit a project server of the same name.
+      const path = scope() === "project" ? project()?.trim() : undefined
       const output = await ctx.client.mcp.list(path ? { location: { directory: path } } : {})
       const next: Record<string, { status: ReturnType<typeof runtimeStatus>["status"]; error?: string }> = {}
       for (const server of output.data ?? []) {

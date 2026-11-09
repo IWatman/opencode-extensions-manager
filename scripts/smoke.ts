@@ -9,6 +9,7 @@ import {
   readScope,
   removeMcp,
   removePlugin,
+  removePluginPackage,
   removeSkill,
   resolveScope,
   saveMcp,
@@ -17,6 +18,23 @@ import {
   setMcpEnabled,
   setSkillEnabled,
 } from "../src/config.ts"
+import { splitCommand } from "../src/gui/helpers.ts"
+
+// Windows paths must survive the command editor; the parser only treats a backslash as an escape
+// before a quote, whitespace, or another backslash.
+assert.deepEqual(splitCommand("npx -y pkg C:\\work"), ["npx", "-y", "pkg", "C:\\work"])
+assert.deepEqual(splitCommand('npx -y pkg "C:\\Program Files\\x"'), [
+  "npx",
+  "-y",
+  "pkg",
+  "C:\\Program Files\\x",
+])
+assert.deepEqual(splitCommand("npx -y pkg C:\\Program\\ Files\\x"), [
+  "npx",
+  "-y",
+  "pkg",
+  "C:\\Program Files\\x",
+])
 
 const root = await mkdtemp(path.join(tmpdir(), "oem-smoke-"))
 const configDir = path.join(root, ".opencode")
@@ -153,6 +171,18 @@ assert.deepEqual(
   ],
 )
 await removePlugin(paths, 1)
+assert.deepEqual(
+  listPlugins((await readScope(paths)).data).map((entry) => entry.package),
+  ["opencode-test"],
+)
+
+await savePlugin(paths, { package: "opencode-duplicate" })
+await savePlugin(paths, { package: "opencode-duplicate" })
+await removePluginPackage(paths, "opencode-duplicate")
+assert.deepEqual(
+  listPlugins((await readScope(paths)).data).map((entry) => entry.package),
+  ["opencode-test"],
+)
 
 const skillContent = `---
 name: sample
