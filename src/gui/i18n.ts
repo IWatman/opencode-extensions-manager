@@ -216,12 +216,12 @@ export const catalog: Catalog = {
 
     "updates.title": "Update center",
     "updates.description":
-      "Check installed marketplace plugins for new versions and commits. Updates are applied one by one; a failure does not stop the batch.",
+      "Check marketplace plugins, npm/GitHub packages, and Claude Code imports for new versions. Updates are applied one by one; a failure does not stop the rest.",
     "updates.check": "Check for updates",
     "updates.checking": "Checking…",
     "updates.checkedAt": "Last checked: {{time}}",
     "updates.outdatedCount": "{{count}} outdated",
-    "updates.none": "All installed marketplace plugins are current.",
+    "updates.none": "Everything installed from a known source is up to date.",
     "updates.versionChange": "{{current}} → {{latest}}",
     "updates.commitChange": "{{current}} → {{latest}}",
     "updates.unknown": "unknown",
@@ -530,12 +530,12 @@ export const catalog: Catalog = {
 
     "updates.title": "Центр обновлений",
     "updates.description":
-      "Проверка установленных плагинов маркетплейсов на новые версии и коммиты. Обновления применяются по одному; сбой не прерывает остальные.",
+      "Проверка обновлений плагинов маркетплейсов, пакетов npm/GitHub и импорта из Claude Code. Обновления применяются по одному; сбой не прерывает остальные.",
     "updates.check": "Проверить обновления",
     "updates.checking": "Проверка…",
     "updates.checkedAt": "Последняя проверка: {{time}}",
     "updates.outdatedCount": "Устарело: {{count}}",
-    "updates.none": "Все установленные плагины маркетплейсов актуальны.",
+    "updates.none": "Всё, что установлено из известного источника, актуально.",
     "updates.versionChange": "{{current}} → {{latest}}",
     "updates.commitChange": "{{current}} → {{latest}}",
     "updates.unknown": "неизвестно",

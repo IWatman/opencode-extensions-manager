@@ -118,6 +118,7 @@ const InstalledPlugin = Schema.Struct({
   scope: Scope,
   project: Schema.optionalKey(Schema.String),
   enabled: Schema.Boolean,
+  adapt: Schema.optionalKey(Schema.Boolean),
   installedAt: Schema.String,
   updatedAt: Schema.String,
   version: Schema.optionalKey(Schema.String),

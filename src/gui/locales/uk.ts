@@ -193,12 +193,12 @@ export const uk: Record<string, string> = {
 
   "updates.title": "Центр оновлень",
   "updates.description":
-    "Перевіряє встановлені плагіни маркетплейсів на нові версії та коміти. Оновлення застосовуються по одному; збій не зупиняє решту.",
+    "Перевіряє нові версії плагінів маркетплейсів, пакетів npm/GitHub та імпорту з Claude Code. Оновлення застосовуються по одному; збій не зупиняє решту.",
   "updates.check": "Перевірити оновлення",
   "updates.checking": "Перевірка…",
   "updates.checkedAt": "Остання перевірка: {{time}}",
   "updates.outdatedCount": "Застаріло: {{count}}",
-  "updates.none": "Усі встановлені плагіни маркетплейсів актуальні.",
+  "updates.none": "Усе, що встановлено з відомого джерела, актуальне.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "невідомо",

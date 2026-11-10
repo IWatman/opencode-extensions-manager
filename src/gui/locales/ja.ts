@@ -194,12 +194,12 @@ export const ja: Record<string, string> = {
 
   "updates.title": "アップデートセンター",
   "updates.description":
-    "インストール済みのマーケットプレイスプラグインに新しいバージョンやコミットがないか確認します。更新は 1 つずつ適用され、失敗してもバッチ全体は停止しません。",
+    "マーケットプレイスのプラグイン、npm/GitHub パッケージ、Claude Code のインポートに新しいバージョンがないか確認します。更新は 1 つずつ適用され、失敗しても残りは続行されます。",
   "updates.check": "更新を確認",
   "updates.checking": "確認中…",
   "updates.checkedAt": "最終確認: {{time}}",
   "updates.outdatedCount": "{{count}} 個が古い",
-  "updates.none": "インストール済みのマーケットプレイスプラグインはすべて最新です。",
+  "updates.none": "既知のソースからインストールされたものはすべて最新です。",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "不明",

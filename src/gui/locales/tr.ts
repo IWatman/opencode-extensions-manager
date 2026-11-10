@@ -193,12 +193,12 @@ export const tr: Record<string, string> = {
 
   "updates.title": "Güncelleme merkezi",
   "updates.description":
-    "Yüklü pazaryeri eklentilerini yeni sürümler ve commit'ler için denetler. Güncellemeler tek tek uygulanır; bir hata toplu işlemi durdurmaz.",
+    "Pazaryeri eklentilerini, npm/GitHub paketlerini ve Claude Code içe aktarımlarını yeni sürümler için denetler. Güncellemeler tek tek uygulanır; bir hata kalanları durdurmaz.",
   "updates.check": "Güncellemeleri denetle",
   "updates.checking": "Denetleniyor…",
   "updates.checkedAt": "Son denetim: {{time}}",
   "updates.outdatedCount": "{{count}} güncel değil",
-  "updates.none": "Yüklü tüm pazaryeri eklentileri güncel.",
+  "updates.none": "Bilinen bir kaynaktan yüklenen her şey güncel.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "bilinmiyor",

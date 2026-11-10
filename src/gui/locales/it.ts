@@ -193,12 +193,12 @@ export const it: Record<string, string> = {
 
   "updates.title": "Centro aggiornamenti",
   "updates.description":
-    "Controlla se i plugin dei marketplace installati hanno nuove versioni e commit. Gli aggiornamenti vengono applicati uno alla volta; un errore non interrompe il lotto.",
+    "Controlla nuove versioni di plugin dei marketplace, pacchetti npm/GitHub e importazioni da Claude Code. Gli aggiornamenti vengono applicati uno alla volta; un errore non interrompe il resto.",
   "updates.check": "Cerca aggiornamenti",
   "updates.checking": "Controllo in corso…",
   "updates.checkedAt": "Ultimo controllo: {{time}}",
   "updates.outdatedCount": "{{count}} obsoleti",
-  "updates.none": "Tutti i plugin dei marketplace installati sono aggiornati.",
+  "updates.none": "Tutto ciò che è installato da una fonte nota è aggiornato.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "sconosciuto",

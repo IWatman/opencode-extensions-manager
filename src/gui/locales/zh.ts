@@ -193,12 +193,12 @@ export const zh: Record<string, string> = {
 
   "updates.title": "更新中心",
   "updates.description":
-    "检查已安装的市场插件是否有新版本和提交。更新会逐个应用；某个失败不会中断整批。",
+    "检查市场插件、npm/GitHub 包和 Claude Code 导入是否有新版本。更新会逐个应用；某个失败不会中断其余项目。",
   "updates.check": "检查更新",
   "updates.checking": "检查中…",
   "updates.checkedAt": "上次检查：{{time}}",
   "updates.outdatedCount": "{{count}} 个已过时",
-  "updates.none": "所有已安装的市场插件均为最新。",
+  "updates.none": "所有从已知来源安装的内容均为最新。",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "未知",

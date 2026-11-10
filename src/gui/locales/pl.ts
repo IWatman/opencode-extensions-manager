@@ -193,12 +193,12 @@ export const pl: Record<string, string> = {
 
   "updates.title": "Centrum aktualizacji",
   "updates.description":
-    "Sprawdza zainstalowane wtyczki marketplace'ów pod kątem nowych wersji i commitów. Aktualizacje są stosowane jedna po drugiej; błąd nie przerywa całej partii.",
+    "Sprawdza nowe wersje wtyczek marketplace'ów, pakietów npm/GitHub i importów z Claude Code. Aktualizacje są stosowane jedna po drugiej; błąd nie przerywa pozostałych.",
   "updates.check": "Sprawdź aktualizacje",
   "updates.checking": "Sprawdzanie…",
   "updates.checkedAt": "Ostatnie sprawdzenie: {{time}}",
   "updates.outdatedCount": "Przestarzałe: {{count}}",
-  "updates.none": "Wszystkie zainstalowane wtyczki marketplace'ów są aktualne.",
+  "updates.none": "Wszystko zainstalowane ze znanego źródła jest aktualne.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "nieznane",

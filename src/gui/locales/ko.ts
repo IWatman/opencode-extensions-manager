@@ -193,12 +193,12 @@ export const ko: Record<string, string> = {
 
   "updates.title": "업데이트 센터",
   "updates.description":
-    "설치된 마켓플레이스 플러그인의 새 버전과 커밋을 확인합니다. 업데이트는 하나씩 적용되며, 실패해도 전체 일괄 작업은 중단되지 않습니다.",
+    "마켓플레이스 플러그인, npm/GitHub 패키지, Claude Code 가져오기의 새 버전을 확인합니다. 업데이트는 하나씩 적용되며, 실패해도 나머지는 계속됩니다.",
   "updates.check": "업데이트 확인",
   "updates.checking": "확인 중…",
   "updates.checkedAt": "마지막 확인: {{time}}",
   "updates.outdatedCount": "{{count}}개 오래됨",
-  "updates.none": "설치된 모든 마켓플레이스 플러그인이 최신입니다.",
+  "updates.none": "알려진 소스에서 설치된 모든 항목이 최신입니다.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "알 수 없음",

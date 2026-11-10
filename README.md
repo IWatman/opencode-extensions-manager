@@ -48,6 +48,10 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Strips Claude-specific `?client=claude-…` parameters from remote MCP URLs.
   - Ignores docs such as `README.md` when scanning skills.
   - Can add minimal YAML frontmatter to skills that need it.
+- **Update center**
+  - Checks marketplace plugins, npm/GitHub package plugins, and Claude Code imports against their original sources.
+  - Updates each item independently and reports per-item results.
+  - MCP servers and skills added by hand have no source and are skipped.
 - **Doctor**
   - Checks invalid JSONC and parse errors, duplicate MCP names across scopes, duplicate plugin entries, invalid MCP and plugin entries, failed or sign-in-required MCP servers, missing config files, and missing or unreadable skills folders.
   - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, and remove duplicate plugin entries with confirmation.
@@ -177,13 +181,17 @@ Imports use the same transactional install path and ownership fingerprints as ma
 
 ### Update center
 
-The **Update center** checks every installed marketplace plugin against its marketplace source.
+The **Update center** on the Overview tab checks installed items against the source they came from:
+
+- marketplace plugins against their marketplace;
+- npm and GitHub package plugins through OpenCode's plugin service;
+- Claude Code imports against the cached plugin version.
 
 1. Click **Check for updates**.
-2. Review outdated plugins with their current and latest versions or commits when available.
-3. Click **Update all outdated** to run a batch. Each plugin is updated independently; one failure does not stop the rest, and per-plugin results show successes, failures, and artifacts kept because they no longer match the installation fingerprint.
+2. Review outdated items with their current and latest versions or commits when available.
+3. Click **Update all outdated** to run a batch. Each item is updated independently; one failure does not stop the rest, and per-item results show successes, failures, and marketplace artifacts kept because they no longer match the installation fingerprint.
 
-Single-plugin updates from the installed list still work the same way.
+MCP servers and skills added by hand have no update source and are left alone.
 
 ### Doctor
 

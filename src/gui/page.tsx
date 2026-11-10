@@ -8,6 +8,7 @@ import { McpSection, type McpStatusMap } from "./mcp"
 import { MarketplacesSection } from "./marketplaces"
 import { PluginsSection } from "./plugins"
 import { SkillsSection } from "./skills"
+import { UpdatesSection } from "./updates"
 
 type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "doctor"
 
@@ -23,7 +24,7 @@ function tabFromTarget(target?: string): Tab {
   if (!target || target === "extensions-manager" || target.startsWith("oem-scope")) return "overview"
   if (target.startsWith("oem-doctor")) return "doctor"
   if (target.startsWith("oem-claude")) return "plugins"
-  if (target.startsWith("oem-updates")) return "marketplaces"
+  if (target.startsWith("oem-updates")) return "overview"
   if (target.startsWith("oem-mcp")) return "mcp"
   if (target.startsWith("oem-plugin")) return "plugins"
   if (target.startsWith("oem-skill")) return "skills"
@@ -273,6 +274,15 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
 
             <Switch>
               <Match when={tab() === "overview"}>
+                <UpdatesSection
+                  ctx={ctx}
+                  project={project()}
+                  state={current()}
+                  saved={saved}
+                  failed={failed}
+                  refresh={refresh}
+                />
+
                 <div class="oem-overview-grid">
                   <button type="button" class="oem-stat" onClick={() => setTab("mcp")}>
                     <span class="oem-stat-value">{mcp().length}</span>
