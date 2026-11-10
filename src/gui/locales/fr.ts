@@ -214,12 +214,12 @@ export const fr: Record<string, string> = {
 
   "updates.title": "Centre de mises à jour",
   "updates.description":
-    "Vérifie les nouvelles versions et les commits des plugins de place de marché installés. Les mises à jour sont appliquées une par une ; un échec n’arrête pas le lot.",
+    "Vérifie les nouvelles versions des plugins de place de marché, des paquets npm/GitHub et des imports Claude Code. Les mises à jour sont appliquées une par une ; un échec n’arrête pas le reste.",
   "updates.check": "Rechercher des mises à jour",
   "updates.checking": "Vérification…",
   "updates.checkedAt": "Dernière vérification : {{time}}",
   "updates.outdatedCount": "{{count}} obsolètes",
-  "updates.none": "Tous les plugins de place de marché installés sont à jour.",
+  "updates.none": "Tout ce qui est installé depuis une source connue est à jour.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "inconnu",

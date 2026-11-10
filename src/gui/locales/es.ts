@@ -214,12 +214,12 @@ export const es: Record<string, string> = {
 
   "updates.title": "Centro de actualizaciones",
   "updates.description":
-    "Comprueba si hay nuevas versiones y commits en los plugins de mercado instalados. Las actualizaciones se aplican una a una; un fallo no detiene el lote.",
+    "Comprueba si hay nuevas versiones en plugins de mercado, paquetes npm/GitHub e importaciones de Claude Code. Las actualizaciones se aplican una a una; un fallo no detiene el resto.",
   "updates.check": "Buscar actualizaciones",
   "updates.checking": "Comprobando…",
   "updates.checkedAt": "Última comprobación: {{time}}",
   "updates.outdatedCount": "{{count}} desactualizados",
-  "updates.none": "Todos los plugins de mercado instalados están al día.",
+  "updates.none": "Todo lo instalado desde una fuente conocida está al día.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "desconocido",

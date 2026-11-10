@@ -214,12 +214,12 @@ export const de: Record<string, string> = {
 
   "updates.title": "Update-Center",
   "updates.description":
-    "Prüft installierte Marktplatz-Plugins auf neue Versionen und Commits. Updates werden einzeln angewendet; ein Fehler stoppt den Stapel nicht.",
+    "Prüft Marktplatz-Plugins, npm/GitHub-Pakete und Claude-Code-Importe auf neue Versionen. Updates werden einzeln angewendet; ein Fehler stoppt den Rest nicht.",
   "updates.check": "Nach Updates suchen",
   "updates.checking": "Wird geprüft…",
   "updates.checkedAt": "Zuletzt geprüft: {{time}}",
   "updates.outdatedCount": "{{count}} veraltet",
-  "updates.none": "Alle installierten Marktplatz-Plugins sind aktuell.",
+  "updates.none": "Alles aus einer bekannten Quelle Installierte ist aktuell.",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "unbekannt",

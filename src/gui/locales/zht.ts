@@ -193,12 +193,12 @@ export const zht: Record<string, string> = {
 
   "updates.title": "更新中心",
   "updates.description":
-    "檢查已安裝的市集外掛是否有新版本與提交。更新會逐一套用；某個失敗不會中斷整批。",
+    "檢查市集外掛、npm/GitHub 套件與 Claude Code 匯入是否有新版本。更新會逐一套用；某個失敗不會中斷其餘項目。",
   "updates.check": "檢查更新",
   "updates.checking": "檢查中…",
   "updates.checkedAt": "上次檢查：{{time}}",
   "updates.outdatedCount": "{{count}} 個已過時",
-  "updates.none": "所有已安裝的市集外掛皆為最新。",
+  "updates.none": "所有從已知來源安裝的內容皆為最新。",
   "updates.versionChange": "{{current}} → {{latest}}",
   "updates.commitChange": "{{current}} → {{latest}}",
   "updates.unknown": "未知",

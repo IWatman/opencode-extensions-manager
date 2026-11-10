@@ -52,8 +52,9 @@ Plugin GUI de escritorio para **OpenCode** que añade una página **Ajustes → 
   - Escanea la caché de plugins de Claude Code y muestra una vista previa de servidores MCP, skills, plugins de OpenCode y partes no compatibles.
   - Las carpetas de origen solo se leen; la importación usa el mismo flujo de instalación transaccional y las mismas huellas de propiedad que los plugins de mercado.
 - **Centro de actualizaciones**
-  - Comprueba todos los plugins de mercado instalados contra su origen de mercado.
-  - Actualiza en lote todos los plugins desactualizados; un fallo no interrumpe los demás y los resultados se muestran por plugin.
+  - Comprueba los plugins de mercado, los plugins de paquete npm/GitHub y las importaciones de Claude Code contra sus orígenes.
+  - Actualiza cada elemento de forma independiente y muestra los resultados por elemento.
+  - Los servidores MCP y las skills añadidos a mano no tienen origen y se omiten.
 - **Diagnóstico**
   - Comprueba JSONC no válido y errores de análisis, nombres MCP duplicados entre ámbitos, entradas de plugin duplicadas, entradas MCP y de plugin no válidas o ilegibles, servidores MCP fallidos o que requieren inicio de sesión, archivos de configuración ausentes y carpetas de skills ausentes o ilegibles.
   - Solo ofrece acciones seguras: ejecutar comprobaciones, mostrar rutas, reintentar servidores MCP fallidos, copiar comandos de inicio de sesión y eliminar entradas de plugin duplicadas con confirmación.
@@ -183,13 +184,17 @@ Las importaciones usan el mismo flujo de instalación transaccional y las mismas
 
 ### Centro de actualizaciones
 
-El **Centro de actualizaciones** comprueba todos los plugins de mercado instalados contra su origen de mercado.
+El **Centro de actualizaciones** de la pestaña **Resumen** comprueba los elementos instalados contra la fuente de la que proceden:
+
+- los plugins de mercado, contra su mercado;
+- los plugins de paquete npm y GitHub, mediante el servicio de plugins de OpenCode;
+- las importaciones de Claude Code, contra la versión del plugin en la caché.
 
 1. Pulsa **Buscar actualizaciones**.
-2. Revisa los plugins desactualizados con sus versiones o commits actuales y más recientes cuando estén disponibles.
-3. Pulsa **Actualizar todos los desactualizados** para ejecutar un lote. Cada plugin se actualiza de forma independiente; un fallo no detiene los demás, y los resultados por plugin muestran éxitos, fallos y artefactos conservados porque ya no coinciden con la huella de instalación.
+2. Revisa los elementos desactualizados con sus versiones o commits actuales y más recientes cuando estén disponibles.
+3. Pulsa **Actualizar todos los desactualizados** para ejecutar un lote. Cada elemento se actualiza de forma independiente; un fallo no detiene los demás, y los resultados por elemento muestran éxitos, fallos y artefactos de mercado conservados porque ya no coinciden con la huella de instalación.
 
-Las actualizaciones individuales desde la lista de instalados siguen funcionando igual.
+Los servidores MCP y las skills añadidos a mano no tienen origen de actualización y no se tocan.
 
 ### Diagnóstico
 
