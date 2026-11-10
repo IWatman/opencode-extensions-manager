@@ -74,6 +74,26 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+/**
+ * Turns a thrown handler error into the typed RPC error the GUI can display. Without this, the
+ * client only sees a generic "RPC call failed" for every validation or filesystem error.
+ */
+function guardHandlers<T extends object>(handlers: T): T {
+  const guarded: Record<string, unknown> = {}
+  for (const [name, handler] of Object.entries(handlers)) {
+    guarded[name] = async (input: unknown, context: unknown) => {
+      try {
+        return await (handler as (input: unknown, context: unknown) => unknown)(input, context)
+      } catch (error) {
+        const failure = context as { error?: (type: "operation", message: string) => unknown }
+        if (failure.error) return failure.error("operation", message(error))
+        throw error
+      }
+    }
+  }
+  return guarded as T
+}
+
 interface StateBuilder {
   global: ScopeInfo
   project?: ScopeInfo
@@ -164,7 +184,9 @@ export default Plugin.define({
       return result
     }
 
-    await ctx.rpc.register(ManagerRpc, {
+    await ctx.rpc.register(
+      ManagerRpc,
+      guardHandlers({
       state: (input) => buildState(input.project),
 
       saveMcp: (input) =>
@@ -418,7 +440,7 @@ export default Plugin.define({
           })
           return { path: report }
         }),
-    })
+    }))
 
     await withWriteLock(async () => {
       try {

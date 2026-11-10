@@ -425,16 +425,12 @@ export function MarketplacesSection(props: {
           </div>
         }
       >
-        <ctx.ui.SettingsRow
-          title={ctx.t("marketplaces.add")}
-          description={
-            <span class="oem-description">
-              <span>{ctx.t("marketplaces.addHint")}</span>
-              <span class="oem-hint">{ctx.t("marketplaces.refHint")}</span>
-            </span>
-          }
-          id="oem-marketplace-add"
-        >
+        <div class="oem-marketplace-add" id="oem-marketplace-add">
+          <div class="oem-field">
+            <span class="oem-field-label">{ctx.t("marketplaces.add")}</span>
+            <span class="oem-hint">{ctx.t("marketplaces.addHint")}</span>
+            <span class="oem-hint">{ctx.t("marketplaces.refHint")}</span>
+          </div>
           <div class="oem-actions oem-actions-wide">
             <ctx.ui.TextInput
               value={addUrl()}
@@ -456,7 +452,7 @@ export function MarketplacesSection(props: {
               {ctx.t("common.add")}
             </ctx.ui.Button>
           </div>
-        </ctx.ui.SettingsRow>
+        </div>
 
         <ctx.ui.SettingsRow
           id="oem-marketplace-auto-refresh"

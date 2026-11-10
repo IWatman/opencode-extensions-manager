@@ -135,6 +135,29 @@ export const styles = `
 .oem-input { flex: 1; min-width: 220px; }
 .oem-input-ref { flex: 0 1 180px; min-width: 140px; }
 
+/* The host's SettingsRow squeezes the title beside wide controls. This form needs the full width
+   above the inputs so the title and both hints stay readable in the narrow settings column. */
+.oem-marketplace-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.oem-marketplace-add .oem-actions-wide {
+  justify-content: flex-start;
+}
+
+.oem-marketplace-add .oem-input {
+  flex: 1 1 260px;
+}
+
+.oem-marketplace-add .oem-input-ref {
+  flex: 0 1 160px;
+  min-width: 120px;
+}
+
 .oem-footer {
   display: flex;
   align-items: center;
@@ -217,8 +240,13 @@ export const styles = `
 }
 
 .oem-toolbar-grow {
-  flex: 1;
-  min-width: 240px;
+  flex: 1 1 320px;
+  min-width: 220px;
+  flex-wrap: wrap;
+}
+
+.oem-toolbar-grow .oem-input {
+  min-width: 180px;
 }
 
 .oem-toolbar-actions {

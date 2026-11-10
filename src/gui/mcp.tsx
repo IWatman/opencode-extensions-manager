@@ -148,6 +148,7 @@ export function McpSection(props: {
       ctx.toast.show({
         title: ctx.t("mcp.reconnectRequested", { name: entry.name }),
         variant: "default",
+        duration: 4000,
       })
       window.setTimeout(() => props.refreshStatuses(), 800)
     } catch (error) {
