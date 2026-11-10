@@ -231,6 +231,10 @@ export type ClaudeInstallResult = typeof ClaudeInstallResult.Type
 const SelfUpdateInstallKind = Schema.Literals(["git", "package", "directory", "unknown"])
 export type SelfUpdateInstallKind = typeof SelfUpdateInstallKind.Type
 
+/** `main` follows the branch tip, `stable` follows the highest semver tag on origin. */
+const SelfUpdateChannel = Schema.Literals(["main", "stable"])
+export type SelfUpdateChannel = typeof SelfUpdateChannel.Type
+
 const SelfUpdateInstall = Schema.Struct({
   kind: SelfUpdateInstallKind,
   path: Schema.String,
@@ -261,6 +265,13 @@ const SelfUpdateInfo = Schema.Struct({
 })
 export type SelfUpdateInfo = typeof SelfUpdateInfo.Type
 
+const SelfUpdateCommit = Schema.Struct({
+  sha: Schema.String,
+  date: Schema.String,
+  message: Schema.String,
+})
+export type SelfUpdateCommit = typeof SelfUpdateCommit.Type
+
 const SelfUpdateCheck = Schema.Struct({
   checkedAt: Schema.String,
   currentVersion: Schema.optionalKey(Schema.String),
@@ -270,6 +281,8 @@ const SelfUpdateCheck = Schema.Struct({
   currentDate: Schema.optionalKey(Schema.String),
   latestDate: Schema.optionalKey(Schema.String),
   latestMessage: Schema.optionalKey(Schema.String),
+  /** Newest commits between the checkout and the selected target, capped by the server. */
+  commits: Schema.optionalKey(Schema.Array(SelfUpdateCommit)),
   ahead: Schema.Finite,
   behind: Schema.Finite,
   updateAvailable: Schema.Boolean,
@@ -288,6 +301,21 @@ const SelfUpdateResult = Schema.Struct({
   error: Schema.optionalKey(Schema.String),
 })
 export type SelfUpdateResult = typeof SelfUpdateResult.Type
+
+const SelfUpdateHistoryEntry = Schema.Struct({
+  commit: Schema.String,
+  version: Schema.String,
+  at: Schema.String,
+  action: Schema.Literals(["update", "rollback"]),
+  previousCommit: Schema.optionalKey(Schema.String),
+  note: Schema.optionalKey(Schema.String),
+})
+export type SelfUpdateHistoryEntry = typeof SelfUpdateHistoryEntry.Type
+
+const SelfUpdateHistory = Schema.Struct({
+  entries: Schema.Array(SelfUpdateHistoryEntry),
+})
+export type SelfUpdateHistory = typeof SelfUpdateHistory.Type
 
 const MarketplaceUpdate = Schema.Struct({
   key: Schema.String,
@@ -635,11 +663,31 @@ export const ManagerRpc = Rpc.define({
       output: portable(SelfUpdateInfo),
     },
     checkSelfUpdate: {
-      input: portable(Schema.Struct({})),
+      input: portable(
+        Schema.Struct({
+          channel: Schema.optionalKey(SelfUpdateChannel),
+        }),
+      ),
       output: portable(SelfUpdateCheck),
     },
     applySelfUpdate: {
+      input: portable(
+        Schema.Struct({
+          channel: Schema.optionalKey(SelfUpdateChannel),
+        }),
+      ),
+      output: portable(SelfUpdateResult),
+    },
+    selfUpdateHistory: {
       input: portable(Schema.Struct({})),
+      output: portable(SelfUpdateHistory),
+    },
+    rollbackSelfUpdate: {
+      input: portable(
+        Schema.Struct({
+          commit: Schema.String,
+        }),
+      ),
       output: portable(SelfUpdateResult),
     },
   },

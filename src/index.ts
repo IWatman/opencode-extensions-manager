@@ -58,6 +58,8 @@ import {
 import {
   applySelfUpdate,
   checkSelfUpdate,
+  readSelfUpdateHistory,
+  rollbackSelfUpdate,
   selfUpdateInfo,
 } from "./self-update"
 
@@ -349,9 +351,13 @@ export default Plugin.define({
 
       selfUpdateInfo: () => selfUpdateInfo(ctx.app),
 
-      checkSelfUpdate: () => checkSelfUpdate(),
+      checkSelfUpdate: (input) => checkSelfUpdate(undefined, undefined, input.channel ?? "main"),
 
-      applySelfUpdate: () => applySelfUpdate(),
+      applySelfUpdate: (input) => applySelfUpdate(undefined, undefined, input.channel ?? "main"),
+
+      selfUpdateHistory: async () => ({ entries: [...(await readSelfUpdateHistory())] }),
+
+      rollbackSelfUpdate: (input) => rollbackSelfUpdate(input.commit),
     })
 
     await withWriteLock(async () => {
