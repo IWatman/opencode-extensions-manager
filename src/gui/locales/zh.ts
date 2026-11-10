@@ -213,8 +213,8 @@ export const zh: Record<string, string> = {
   "updates.notChecked": "运行检查以列出过时的插件。",
   "updates.checkFailed": "无法检查更新",
 
-  "tabs.about": "关于",
-  "about.title": "关于",
+  "tabs.about": "关于插件",
+  "about.title": "关于插件",
   "about.description": "显示 Extensions Manager 插件自身的版本、安装信息和更新。",
   "about.experimental": "实验性",
   "about.install": "安装",

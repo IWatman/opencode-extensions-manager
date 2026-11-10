@@ -214,8 +214,8 @@ export const ja: Record<string, string> = {
   "updates.notChecked": "チェックを実行すると、古いプラグインが一覧表示されます。",
   "updates.checkFailed": "更新を確認できませんでした",
 
-  "tabs.about": "このアプリについて",
-  "about.title": "このアプリについて",
+  "tabs.about": "プラグインについて",
+  "about.title": "プラグインについて",
   "about.description": "Extensions Manager プラグイン自体のバージョン、インストール情報、更新を表示します。",
   "about.experimental": "実験的",
   "about.install": "インストール",

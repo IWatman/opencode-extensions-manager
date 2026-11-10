@@ -213,8 +213,8 @@ export const uk: Record<string, string> = {
   "updates.notChecked": "Запустіть перевірку, щоб побачити застарілі плагіни.",
   "updates.checkFailed": "Не вдалося перевірити оновлення",
 
-  "tabs.about": "Про додаток",
-  "about.title": "Про додаток",
+  "tabs.about": "Про плагін",
+  "about.title": "Про плагін",
   "about.description": "Версія, відомості про встановлення та оновлення самого плагіна Extensions Manager.",
   "about.experimental": "експериментально",
   "about.install": "Встановлення",

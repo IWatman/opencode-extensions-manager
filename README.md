@@ -52,7 +52,7 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Checks marketplace plugins, npm/GitHub package plugins, and Claude Code imports against their original sources.
   - Updates each item independently and reports per-item results.
   - MCP servers and skills added by hand have no source and are skipped.
-- **About and self-update**
+- **About plugin and self-update**
   - Shows the plugin version, OpenCode version, installation path, branch, and commit.
   - A Git checkout can update itself from the official GitHub repository with a fast-forward pull, dependency install when needed, and a GUI rebuild.
   - Package installs are updated through OpenCode's plugin service.
@@ -198,9 +198,9 @@ The **Update center** on the Overview tab checks installed items against the sou
 
 MCP servers and skills added by hand have no update source and are left alone.
 
-### About and self-update
+### About plugin and self-update
 
-The **About** tab shows the plugin version, OpenCode version, repository, license, installation path, branch, and current commit.
+The **About plugin** tab shows the plugin version, OpenCode version, repository, license, installation path, branch, and current commit.
 
 - **Check for updates** compares a Git checkout with `origin/main` and also asks OpenCode's plugin service about package installs.
 - **Update plugin** fast-forwards a clean checkout on `main`, runs `npm install` when package files changed, and rebuilds the GUI bundle. Package installs are updated through OpenCode's plugin service.

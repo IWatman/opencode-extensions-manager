@@ -213,8 +213,8 @@ export const tr: Record<string, string> = {
   "updates.notChecked": "Güncel olmayan eklentileri listelemek için bir denetim çalıştırın.",
   "updates.checkFailed": "Güncellemeler denetlenemedi",
 
-  "tabs.about": "Hakkında",
-  "about.title": "Hakkında",
+  "tabs.about": "Eklenti hakkında",
+  "about.title": "Eklenti hakkında",
   "about.description": "Extensions Manager eklentisinin sürümü, kurulum bilgileri ve güncellemeleri.",
   "about.experimental": "deneysel",
   "about.install": "Kurulum",

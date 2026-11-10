@@ -213,8 +213,8 @@ export const pl: Record<string, string> = {
   "updates.notChecked": "Uruchom sprawdzanie, aby wyświetlić przestarzałe wtyczki.",
   "updates.checkFailed": "Nie udało się sprawdzić aktualizacji",
 
-  "tabs.about": "O aplikacji",
-  "about.title": "O aplikacji",
+  "tabs.about": "O pluginie",
+  "about.title": "O pluginie",
   "about.description": "Wersja, informacje o instalacji i aktualizacje samego pluginu Extensions Manager.",
   "about.experimental": "eksperymentalny",
   "about.install": "Instalacja",
