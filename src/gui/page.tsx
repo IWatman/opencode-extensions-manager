@@ -1,6 +1,7 @@
 import { createEffect, createSignal, For, Match, onMount, Show, Switch } from "solid-js"
 import type { IconName } from "@opencode/plugin/gui"
 import { ManagerRpc, type ManagerState, type Scope } from "../rpc"
+import { AboutSection } from "./about"
 import { ClaudeImportSection } from "./claude"
 import { DoctorSection } from "./doctor"
 import { errorText, revealPath, runtimeStatus, type GuiContext } from "./helpers"
@@ -10,7 +11,7 @@ import { PluginsSection } from "./plugins"
 import { SkillsSection } from "./skills"
 import { UpdatesSection } from "./updates"
 
-type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "doctor"
+type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "doctor" | "about"
 
 interface TabItem {
   readonly id: Tab
@@ -23,6 +24,7 @@ interface TabItem {
 function tabFromTarget(target?: string): Tab {
   if (!target || target === "extensions-manager" || target.startsWith("oem-scope")) return "overview"
   if (target.startsWith("oem-doctor")) return "doctor"
+  if (target.startsWith("oem-about")) return "about"
   if (target.startsWith("oem-claude")) return "plugins"
   if (target.startsWith("oem-updates")) return "overview"
   if (target.startsWith("oem-mcp")) return "mcp"
@@ -145,6 +147,7 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
       icon: "circle-exclamation",
       ...(diagnostics().length > 0 ? { count: diagnostics().length, warning: true } : {}),
     },
+    { id: "about", label: ctx.t("tabs.about"), icon: "info" },
   ]
 
   const pickProject = async () => {
@@ -450,6 +453,10 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                   refresh={refresh}
                   refreshStatuses={loadStatuses}
                 />
+              </Match>
+
+              <Match when={tab() === "about"}>
+                <AboutSection ctx={ctx} />
               </Match>
             </Switch>
           </>

@@ -228,6 +228,67 @@ const ClaudeInstallResult = Schema.Struct({
 })
 export type ClaudeInstallResult = typeof ClaudeInstallResult.Type
 
+const SelfUpdateInstallKind = Schema.Literals(["git", "package", "directory", "unknown"])
+export type SelfUpdateInstallKind = typeof SelfUpdateInstallKind.Type
+
+const SelfUpdateInstall = Schema.Struct({
+  kind: SelfUpdateInstallKind,
+  path: Schema.String,
+  branch: Schema.optionalKey(Schema.String),
+  commit: Schema.optionalKey(Schema.String),
+  remote: Schema.optionalKey(Schema.String),
+  dirty: Schema.Boolean,
+  canUpdate: Schema.Boolean,
+  reason: Schema.optionalKey(Schema.String),
+})
+export type SelfUpdateInstall = typeof SelfUpdateInstall.Type
+
+const SelfUpdateInfo = Schema.Struct({
+  name: Schema.String,
+  version: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  author: Schema.optionalKey(Schema.String),
+  license: Schema.optionalKey(Schema.String),
+  repository: Schema.optionalKey(Schema.String),
+  homepage: Schema.optionalKey(Schema.String),
+  issues: Schema.optionalKey(Schema.String),
+  app: Schema.Struct({
+    name: Schema.String,
+    version: Schema.String,
+    channel: Schema.String,
+  }),
+  install: SelfUpdateInstall,
+})
+export type SelfUpdateInfo = typeof SelfUpdateInfo.Type
+
+const SelfUpdateCheck = Schema.Struct({
+  checkedAt: Schema.String,
+  currentVersion: Schema.optionalKey(Schema.String),
+  latestVersion: Schema.optionalKey(Schema.String),
+  currentCommit: Schema.optionalKey(Schema.String),
+  latestCommit: Schema.optionalKey(Schema.String),
+  currentDate: Schema.optionalKey(Schema.String),
+  latestDate: Schema.optionalKey(Schema.String),
+  latestMessage: Schema.optionalKey(Schema.String),
+  ahead: Schema.Finite,
+  behind: Schema.Finite,
+  updateAvailable: Schema.Boolean,
+  canUpdate: Schema.Boolean,
+  reason: Schema.optionalKey(Schema.String),
+})
+export type SelfUpdateCheck = typeof SelfUpdateCheck.Type
+
+const SelfUpdateResult = Schema.Struct({
+  ok: Schema.Boolean,
+  previousCommit: Schema.String,
+  commit: Schema.String,
+  version: Schema.String,
+  restartRequired: Schema.Boolean,
+  log: Schema.optionalKey(Schema.String),
+  error: Schema.optionalKey(Schema.String),
+})
+export type SelfUpdateResult = typeof SelfUpdateResult.Type
+
 const MarketplaceUpdate = Schema.Struct({
   key: Schema.String,
   marketplace: Schema.String,
@@ -568,6 +629,18 @@ export const ManagerRpc = Rpc.define({
         }),
       ),
       output: portable(StateSchema),
+    },
+    selfUpdateInfo: {
+      input: portable(Schema.Struct({})),
+      output: portable(SelfUpdateInfo),
+    },
+    checkSelfUpdate: {
+      input: portable(Schema.Struct({})),
+      output: portable(SelfUpdateCheck),
+    },
+    applySelfUpdate: {
+      input: portable(Schema.Struct({})),
+      output: portable(SelfUpdateResult),
     },
   },
   events: {},
