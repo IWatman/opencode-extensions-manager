@@ -412,7 +412,11 @@ export function AboutSection(props: { ctx: GuiContext }) {
                   description={
                     <span class="oem-description">
                       <span class={value().ok ? "oem-hint" : "oem-error"}>
-                        {value().ok ? ctx.t("about.updateDone") : ctx.t("about.updateFailed")}
+                        {value().ok
+                          ? value().restartRequired
+                            ? ctx.t("about.updateDone")
+                            : ctx.t("about.noUpdate")
+                          : ctx.t("about.updateFailed")}
                         <Show when={value().error}>: {value().error}</Show>
                       </span>
                       <Show when={value().restartRequired}>
