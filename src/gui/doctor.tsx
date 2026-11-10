@@ -438,6 +438,7 @@ export function DoctorSection(props: {
       ctx.toast.show({
         title: ctx.t("doctor.retryRequested", { name: entry.name }),
         variant: "default",
+        duration: 4000,
       })
       window.setTimeout(() => void props.refreshStatuses(), 800)
     } catch (error) {

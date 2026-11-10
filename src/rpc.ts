@@ -15,6 +15,9 @@ type PortableSource = Parameters<typeof Schema.toStandardSchemaV1>[0]
  */
 const portable = <S extends PortableSource>(schema: S) => Schema.toStandardSchemaV1(schema)
 
+/** Error payload shared by RPC methods: the message is the only thing the GUI shows. */
+const operationErrors = { operation: portable(Schema.Undefined) } as const
+
 const Scope = Schema.Literals(["global", "project"])
 export type Scope = typeof Scope.Type
 
@@ -430,10 +433,12 @@ export const ManagerRpc = Rpc.define({
   id: "extensions.manager",
   methods: {
     state: {
+      errors: operationErrors,
       input: portable(Schema.Struct(ProjectInput)),
       output: portable(StateSchema),
     },
     saveMcp: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -445,6 +450,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     removeMcp: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -454,6 +460,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     setMcpEnabled: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -464,6 +471,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     savePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -476,6 +484,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     removePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -485,6 +494,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     saveSkill: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -496,6 +506,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     removeSkill: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -505,6 +516,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     setSkillEnabled: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -515,6 +527,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     marketplaces: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           refresh: Schema.optionalKey(Schema.Boolean),
@@ -527,6 +540,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     catalog: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           marketplace: Schema.String,
@@ -543,6 +557,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     addMarketplace: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           url: Schema.String,
@@ -561,6 +576,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     removeMarketplace: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           marketplace: Schema.String,
@@ -570,6 +586,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     inspectMarketplacePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           marketplace: Schema.String,
@@ -579,6 +596,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(PluginInspection),
     },
     installMarketplacePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -590,6 +608,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     uninstallMarketplacePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           key: Schema.String,
@@ -599,6 +618,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     setMarketplacePluginEnabled: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           key: Schema.String,
@@ -609,6 +629,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     updateMarketplacePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           key: Schema.String,
@@ -618,6 +639,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     rollbackMarketplacePlugin: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           key: Schema.String,
@@ -632,6 +654,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     checkMarketplaceUpdates: {
+      errors: operationErrors,
       input: portable(Schema.Struct({})),
       output: portable(
         Schema.Struct({
@@ -641,6 +664,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     updateAllMarketplacePlugins: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           /** Keys returned by `checkMarketplaceUpdates`; omitted updates every outdated plugin. */
@@ -656,6 +680,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     previewClaudePlugins: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           scope: Scope,
@@ -667,6 +692,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(ClaudePreview),
     },
     installClaudePlugins: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           scope: Scope,
@@ -688,6 +714,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     inspectRepository: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           url: Schema.String,
@@ -696,6 +723,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(RepositoryInspection),
     },
     installRepository: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -705,10 +733,12 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     selfUpdateInfo: {
+      errors: operationErrors,
       input: portable(Schema.Struct({})),
       output: portable(SelfUpdateInfo),
     },
     checkSelfUpdate: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           channel: Schema.optionalKey(SelfUpdateChannel),
@@ -717,6 +747,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(SelfUpdateCheck),
     },
     applySelfUpdate: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           channel: Schema.optionalKey(SelfUpdateChannel),
@@ -725,10 +756,12 @@ export const ManagerRpc = Rpc.define({
       output: portable(SelfUpdateResult),
     },
     selfUpdateHistory: {
+      errors: operationErrors,
       input: portable(Schema.Struct({})),
       output: portable(SelfUpdateHistory),
     },
     rollbackSelfUpdate: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           commit: Schema.String,
@@ -742,6 +775,7 @@ export const ManagerRpc = Rpc.define({
     /* ------------------------------------------------------------------------------------------ */
 
     configBackups: {
+      errors: operationErrors,
       input: portable(Schema.Struct(TargetInput)),
       output: portable(
         Schema.Struct({
@@ -751,6 +785,7 @@ export const ManagerRpc = Rpc.define({
       ),
     },
     configBackupDiff: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           /** Optional: the scope can be inferred from a known backup path. */
@@ -763,6 +798,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(ConfigBackupDiff),
     },
     restoreConfigBackup: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -773,6 +809,7 @@ export const ManagerRpc = Rpc.define({
       output: portable(StateSchema),
     },
     previewMcp: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
@@ -784,10 +821,12 @@ export const ManagerRpc = Rpc.define({
       output: portable(ConfigPreview),
     },
     ensureScope: {
+      errors: operationErrors,
       input: portable(Schema.Struct(TargetInput)),
       output: portable(StateSchema),
     },
     exportDoctorReport: {
+      errors: operationErrors,
       input: portable(
         Schema.Struct({
           ...TargetInput,
