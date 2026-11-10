@@ -3,14 +3,19 @@ import { ManagerRpc, type ManagerState, type McpEntry, type Scope } from "../rpc
 import {
   errorText,
   formatCommand,
+  formatJson,
   formatPairs,
+  hasSecretHeaders,
   isRecord,
+  maskedMcpPairs,
   mcpDisabled,
+  mcpHasPairs,
   mcpSummary,
   mcpType,
   parsePairs,
   quoteArgument,
   runtimeStatus,
+  sanitizeMcpConfig,
   type GuiContext,
   type RuntimeStatus,
   splitCommand,
@@ -110,6 +115,19 @@ export function McpSection(props: {
     }
   }
 
+  const copySanitized = async (entry: McpEntry) => {
+    try {
+      await ctx.system.copy(formatJson(sanitizeMcpConfig(entry.config)))
+      ctx.toast.show({
+        title: ctx.t("mcp.copySanitized"),
+        description: ctx.t("mcp.copySanitizedDone"),
+        variant: "default",
+      })
+    } catch (error) {
+      props.failed(error)
+    }
+  }
+
   return (
     <ctx.ui.SettingsSection
       title={ctx.t("mcp.title")}
@@ -136,6 +154,7 @@ export function McpSection(props: {
             const runtime = () => props.statuses[entry.name] ?? { status: "unknown" as RuntimeStatus }
             const disabled = () => mcpDisabled(entry.config)
             const key = () => `mcp:${entry.scope}:${entry.name}`
+            const [revealSecrets, setRevealSecrets] = createSignal(false)
             return (
               <ctx.ui.SettingsRow
                 id={`oem-mcp-${entry.scope}-${entry.name}`}
@@ -156,6 +175,12 @@ export function McpSection(props: {
                     <Show when={mcpSummary(entry.config)}>
                       <code class="oem-command">{mcpSummary(entry.config)}</code>
                     </Show>
+                    <Show when={mcpHasPairs(entry.config)}>
+                      <code class="oem-command">{maskedMcpPairs(entry.config, revealSecrets())}</code>
+                    </Show>
+                    <Show when={entry.scope === "project" && hasSecretHeaders(entry.config)}>
+                      <span class="oem-warning">{ctx.t("mcp.projectSecretWarning")}</span>
+                    </Show>
                     <Show when={runtime().error}>
                       <span class="oem-error">{runtime().error}</span>
                     </Show>
@@ -173,6 +198,23 @@ export function McpSection(props: {
                       {ctx.t("mcp.login")}
                     </ctx.ui.Button>
                   </Show>
+                  <Show when={mcpHasPairs(entry.config)}>
+                    <ctx.ui.IconButton
+                      icon={revealSecrets() ? "outline-eye-slash" : "eye"}
+                      size="small"
+                      label={ctx.t(revealSecrets() ? "mcp.hideSecrets" : "mcp.showSecrets")}
+                      pressed={revealSecrets()}
+                      disabled={props.busy === key()}
+                      onClick={() => setRevealSecrets(!revealSecrets())}
+                    />
+                  </Show>
+                  <ctx.ui.IconButton
+                    icon="copy"
+                    size="small"
+                    label={ctx.t("mcp.copySanitized")}
+                    disabled={props.busy === key()}
+                    onClick={() => void copySanitized(entry)}
+                  />
                   <ctx.ui.Switch
                     checked={!disabled()}
                     disabled={props.busy === key()}

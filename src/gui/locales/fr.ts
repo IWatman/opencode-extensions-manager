@@ -390,4 +390,24 @@ export const fr: Record<string, string> = {
 
   "footer.note":
     "OpenCode surveille ces fichiers et recharge les extensions automatiquement après une modification. Redémarrez l’application si un plugin continue d’exécuter l’ancien code.",
+
+  "mcp.showSecrets": "Afficher les valeurs",
+  "mcp.hideSecrets": "Masquer les valeurs",
+  "mcp.copySanitized": "Copier la configuration nettoyée",
+  "mcp.copySanitizedDone": "Configuration MCP copiée avec les valeurs d'environnement et d'en-têtes remplacées par ***.",
+  "mcp.projectSecretWarning": "Des en-têtes ressemblant à des secrets se trouvent dans la configuration du projet. Préférez la portée globale pour les identifiants.",
+  "marketplaces.thirdParty": "tiers",
+  "marketplaces.trustTitle": "Ajouter un marketplace tiers ?",
+  "marketplaces.trustDescription": "{{url}} n'est pas le marketplace Anthropic intégré. Les plugins de ce marketplace peuvent ajouter des serveurs MCP, des compétences et du code à OpenCode. Continuez uniquement si vous faites confiance à sa source.",
+  "marketplaces.trustConfirm": "Ajouter le marketplace",
+  "marketplaces.ref": "Ref (branche, étiquette ou commit)",
+  "marketplaces.refHint": "Facultatif. Vide utilise la branche par défaut ; une URL /tree/<ref> fonctionne aussi.",
+  "marketplaces.refBadge": "ref : {{ref}}",
+  "marketplaces.autoRefresh": "Actualisation automatique du catalogue",
+  "marketplaces.autoRefreshHint": "Actualiser les marketplaces et le catalogue ouvert toutes les 5 minutes tant que cette section est ouverte.",
+  "marketplaces.rollback": "Revenir en arrière",
+  "marketplaces.rollbackTitle": "Revenir à la version précédente du plugin ?",
+  "marketplaces.rollbackDescription": "Réinstaller {{name}} depuis la révision précédente enregistrée ({{revision}}). Les artefacts actuels sont remplacés ; l'état d'activation et les empreintes de propriété sont conservés.",
+  "marketplaces.rollbackDone": "{{name}} restauré",
+  "marketplaces.previousRevision": "précédent : {{revision}}",
 }

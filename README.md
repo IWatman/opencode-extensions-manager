@@ -13,6 +13,9 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Remote servers with URL, headers, and OAuth configuration.
   - Enable/disable without deleting the entry.
   - Runtime status: connected, starting, disabled, failed, sign-in required.
+  - Environment and header values are masked in the list; the eye button reveals them.
+  - **Copy sanitized config** replaces environment, header, and OAuth client secret values with `***`.
+  - Credential-like headers in a project config are flagged with a warning; prefer the global scope.
 - **Plugins**
   - npm packages.
   - Local plugin folders.
@@ -26,6 +29,10 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Built-in Anthropic marketplace catalog: `anthropics/claude-plugins-official`.
   - Nothing is installed automatically from it.
   - Add more marketplaces by GitHub URL, `owner/repo`, or local folder.
+  - A trust prompt explains that third-party marketplace plugins can add MCP servers, skills, and code; non-built-in entries also carry a **third-party** badge.
+  - Optional Git ref, branch, or tag pinning. URLs with `/tree/<ref>` keep working and the resolved ref is shown.
+  - Optional catalog auto-refresh every 5 minutes while the section is open; the choice is stored in the browser.
+  - Roll back an updated plugin to its previous recorded revision when the marketplace still offers it.
   - Search the catalog, install, update, enable/disable, and remove plugins.
   - Automatic compatibility extraction for Claude Code plugins:
     - MCP servers from `.mcp.json` / `mcpServers`.
@@ -145,7 +152,10 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 - Add local or remote servers.
 - Edit name, type, command/URL, environment, headers, and OAuth settings.
 - Toggle a server without deleting it.
+- Environment and header values are hidden in each row. Use the eye button to reveal them for the current visit.
+- **Copy sanitized config** copies the server config with environment and header values replaced by `***`; the edit dialog always shows real values while you edit.
 - If a remote server needs authentication, use the **Sign in** action or run the copied command in a terminal.
+- A warning appears when a credential-like header is stored in the project config instead of the global config.
 
 ### Plugins
 
@@ -163,9 +173,14 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 
 1. Open the **Plugin marketplaces** section.
 2. The official Anthropic catalog is already listed.
-3. Click **Catalog** to browse it.
-4. Use search to find a plugin.
-5. Click **Install** and confirm the compatible parts.
+3. To add another source, enter its URL and optionally a Git **Ref** (branch, tag, or commit). Leave the field empty for the default branch. A URL with `/tree/<ref>` also works.
+4. Confirm the third-party trust prompt. It names the URL and explains that marketplace plugins can add MCP servers, skills, and code.
+5. Click **Catalog** to browse it; the resolved ref and a **third-party** badge are shown on non-built-in marketplaces.
+6. Use search to find a plugin.
+7. Click **Install** and confirm the compatible parts.
+8. Optional: enable **Auto-refresh catalog** to reload marketplaces and the open catalog every 5 minutes while the section is open.
+
+After a successful update, the installed row offers **Roll back** while the previous version or commit is recorded. Rollback reinstalls that revision, keeps the enabled state, and recalculates ownership fingerprints. If the marketplace no longer offers the old files, the action fails before changing anything.
 
 Marketplace metadata and installed records are stored in:
 
@@ -330,6 +345,7 @@ After changing GUI code, run `npm run build` and restart OpenCode Desktop. Serve
 - Claude Code commands, agents, hooks, and LSP servers are not supported by OpenCode.
 - GitHub API rate limits apply when fetching marketplace plugin trees. Trees are cached for five minutes.
 - Update checks use version metadata or resolved GitHub commit SHAs. A local marketplace that changes files without changing either is reported as current.
+- Rollback needs a recorded previous revision. GitHub installs can fetch the old commit; a local marketplace without an older version in its manifest cannot recover the files, and the rollback stops before changing anything.
 - Doctor does not rewrite configuration on its own except for the explicit duplicate-plugin-entry removal action.
 - Skills are scanned one level deep: `<skillsDir>/<id>/SKILL.md` and `<skillsDir>/<id>.md`.
 - The OAuth browser flow is started by the OpenCode CLI, not by the manager.

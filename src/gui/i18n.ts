@@ -394,6 +394,30 @@ export const catalog: Catalog = {
 
     "footer.note":
       "OpenCode watches these files and reloads extensions automatically after a change. Restart the app if a plugin keeps running its old code.",
+
+    "mcp.showSecrets": "Show values",
+    "mcp.hideSecrets": "Hide values",
+    "mcp.copySanitized": "Copy sanitized config",
+    "mcp.copySanitizedDone": "MCP config copied with environment and header values replaced by ***.",
+    "mcp.projectSecretWarning":
+      "Secret-looking headers are stored in the project config. Prefer the global scope for credentials.",
+    "marketplaces.thirdParty": "third-party",
+    "marketplaces.trustTitle": "Add a third-party marketplace?",
+    "marketplaces.trustDescription":
+      "{{url}} is not the built-in Anthropic marketplace. Plugins from this marketplace can add MCP servers, skills, and code to OpenCode. Only continue if you trust its source.",
+    "marketplaces.trustConfirm": "Add marketplace",
+    "marketplaces.ref": "Ref (branch, tag, or commit)",
+    "marketplaces.refHint": "Optional. Empty uses the default branch; a /tree/<ref> URL also works.",
+    "marketplaces.refBadge": "ref: {{ref}}",
+    "marketplaces.autoRefresh": "Auto-refresh catalog",
+    "marketplaces.autoRefreshHint":
+      "Refresh marketplaces and the open catalog every 5 minutes while this section is open.",
+    "marketplaces.rollback": "Roll back",
+    "marketplaces.rollbackTitle": "Roll back marketplace plugin?",
+    "marketplaces.rollbackDescription":
+      "Reinstall {{name}} from its previous recorded revision ({{revision}}). Current plugin artifacts are replaced; enable state and ownership fingerprints are preserved.",
+    "marketplaces.rollbackDone": "{{name}} rolled back",
+    "marketplaces.previousRevision": "previous: {{revision}}",
   },
 
   ru: {
@@ -782,6 +806,31 @@ export const catalog: Catalog = {
 
     "footer.note":
       "OpenCode следит за этими файлами и перезагружает расширения после изменений. Если плагин продолжает работать по-старому, перезапустите приложение.",
+
+    "mcp.showSecrets": "Показать значения",
+    "mcp.hideSecrets": "Скрыть значения",
+    "mcp.copySanitized": "Скопировать безопасный конфиг",
+    "mcp.copySanitizedDone":
+      "Конфиг MCP скопирован: значения переменных окружения и заголовков заменены на ***.",
+    "mcp.projectSecretWarning":
+      "В конфигурации проекта хранятся заголовки, похожие на секреты. Для учётных данных лучше использовать глобальную область.",
+    "marketplaces.thirdParty": "сторонний",
+    "marketplaces.trustTitle": "Добавить сторонний маркетплейс?",
+    "marketplaces.trustDescription":
+      "{{url}} — не встроенный маркетплейс Anthropic. Плагины из него могут добавлять MCP-серверы, навыки и код в OpenCode. Продолжайте, только если доверяете источнику.",
+    "marketplaces.trustConfirm": "Добавить маркетплейс",
+    "marketplaces.ref": "Ref (ветка, тег или коммит)",
+    "marketplaces.refHint": "Необязательно. Пусто — ветка по умолчанию; URL с /tree/<ref> тоже работает.",
+    "marketplaces.refBadge": "ref: {{ref}}",
+    "marketplaces.autoRefresh": "Автообновление каталога",
+    "marketplaces.autoRefreshHint":
+      "Обновлять маркетплейсы и открытый каталог каждые 5 минут, пока раздел открыт.",
+    "marketplaces.rollback": "Откатить",
+    "marketplaces.rollbackTitle": "Откатить плагин маркетплейса?",
+    "marketplaces.rollbackDescription":
+      "Переустановить {{name}} из предыдущей сохранённой ревизии ({{revision}}). Текущие артефакты плагина будут заменены; состояние включения и отпечатки владения сохранятся.",
+    "marketplaces.rollbackDone": "{{name}} откатан",
+    "marketplaces.previousRevision": "предыдущая: {{revision}}",
   },
   de,
   es,

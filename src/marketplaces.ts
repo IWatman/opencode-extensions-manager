@@ -88,6 +88,9 @@ export interface InstalledRecord {
   readonly updatedAt: string
   readonly version?: string
   readonly commit?: string
+  /** Revision installed before the most recent successful update, used by rollback. */
+  readonly previousVersion?: string
+  readonly previousCommit?: string
   readonly mcp: readonly string[]
   readonly skills: readonly string[]
   readonly plugins: readonly string[]
@@ -219,6 +222,8 @@ export function normalizeRegistry(input: unknown): Registry {
             updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : new Date().toISOString(),
             ...(typeof entry.version === "string" ? { version: entry.version } : {}),
             ...(typeof entry.commit === "string" ? { commit: entry.commit } : {}),
+            ...(typeof entry.previousVersion === "string" ? { previousVersion: entry.previousVersion } : {}),
+            ...(typeof entry.previousCommit === "string" ? { previousCommit: entry.previousCommit } : {}),
             mcp: Array.isArray(entry.mcp) ? entry.mcp.filter((value): value is string => typeof value === "string") : [],
             skills: Array.isArray(entry.skills)
               ? entry.skills.filter((value): value is string => typeof value === "string")
@@ -538,7 +543,8 @@ const marketplaceCache = new Map<string, { at: number; value: LoadedMarketplace 
 const marketplaceCacheTTL = 5 * 60 * 1000
 
 function cacheKey(record: MarketplaceRecord) {
-  return `${record.id}\n${record.url}`
+  // The same repository can be browsed at different refs; keep their manifests apart.
+  return `${record.id}\n${record.url}\n${record.ref ?? ""}`
 }
 
 async function readLocalManifest(location: LocalLocation): Promise<MarketplaceManifest | undefined> {
@@ -1693,6 +1699,8 @@ interface ExtractedInstallRequest {
   readonly project?: string
   readonly extracted: Extracted
   readonly adapt?: boolean
+  /** Records the currently installed version and commit as the rollback target after an update. */
+  readonly trackPrevious?: boolean
 }
 
 /**
@@ -1742,6 +1750,16 @@ async function installExtracted(request: ExtractedInstallRequest): Promise<{ key
     )
     const fingerprints = await captureFingerprints(effectivePaths, applied)
     const now = new Date().toISOString()
+    // A rollback is a normal transactional install too: recording the revision it replaced keeps
+    // the same one-step undo available in the opposite direction.
+    const previousVersion =
+      request.trackPrevious && previous?.version && previous.version !== request.version
+        ? previous.version
+        : undefined
+    const previousCommit =
+      request.trackPrevious && previous?.commit && previous.commit !== request.commit
+        ? previous.commit
+        : undefined
     const next: InstalledRecord = {
       key,
       marketplace: request.marketplace,
@@ -1757,6 +1775,8 @@ async function installExtracted(request: ExtractedInstallRequest): Promise<{ key
       updatedAt: now,
       ...(request.version ? { version: request.version } : {}),
       ...(request.commit ? { commit: request.commit } : {}),
+      ...(previousVersion ? { previousVersion } : {}),
+      ...(previousCommit ? { previousCommit } : {}),
       mcp: applied.mcp,
       skills: applied.skills,
       plugins: applied.plugins,
@@ -1824,6 +1844,7 @@ export async function installMarketplacePlugin(input: {
     ...(input.project ? { project: input.project } : {}),
     extracted,
     adapt: input.adapt,
+    ...(input.update === true ? { trackPrevious: true } : {}),
   })
 }
 
@@ -1952,6 +1973,133 @@ export async function updateMarketplacePlugin(key: string): Promise<void> {
     ...(record.project ? { project: record.project } : {}),
     update: true,
   })
+}
+
+/**
+ * The previous revision recorded by the latest successful update. Validation happens before any
+ * artifact is touched so an unavailable revision cannot leave a half-rolled-back install.
+ */
+export function rollbackRevision(
+  record: Pick<InstalledRecord, "previousVersion" | "previousCommit">,
+): { version?: string; commit?: string } {
+  if (!record.previousCommit && !record.previousVersion) {
+    throw new Error("No previous revision is recorded for this plugin; nothing was changed.")
+  }
+  return {
+    ...(record.previousVersion ? { version: record.previousVersion } : {}),
+    ...(record.previousCommit ? { commit: record.previousCommit } : {}),
+  }
+}
+
+/**
+ * Reinstalls an installed marketplace plugin from the revision stored by its last update. A commit
+ * is fetched directly from GitHub, so the old files remain available even after a branch moves. A
+ * version-only record can roll back only while the marketplace still offers that version. Every
+ * check runs before `installExtracted`, which keeps the usual snapshot-based transaction.
+ */
+export async function rollbackMarketplacePlugin(key: string): Promise<BatchUpdateResult> {
+  const { registry } = await readRegistry()
+  const record = registry.installed.find((item) => item.key === key)
+  if (!record) throw new Error(`Installed plugin not found: ${key}`)
+  const revision = rollbackRevision(record)
+  const marketplace = findMarketplace(registry, record.marketplace)
+  if (!marketplace) {
+    throw new Error(`Cannot roll back ${record.plugin}: marketplace not found: ${record.marketplace}`)
+  }
+
+  const loaded = await loadMarketplace(marketplace, true)
+  const entry = findEntry(loaded, record.plugin)
+  if (!entry) {
+    throw new Error(
+      `Cannot roll back ${record.plugin}: the marketplace ${loaded.record.name} no longer offers it. Nothing was changed.`,
+    )
+  }
+
+  let location: PluginLocation
+  let extracted: Extracted
+  if (revision.commit) {
+    // For a plugin that lives in the marketplace repository, the old manifest describes the files
+    // at that commit too, including inline mcpServers and a source folder that may have moved.
+    let sourceEntry = entry
+    let sourceLoaded = loaded
+    if (loaded.location.kind === "github") {
+      try {
+        const old = await readGithubManifest(
+          { ...loaded.location, ref: revision.commit },
+          revision.commit,
+        )
+        if (old && old.ref === revision.commit) {
+          const oldLoaded: LoadedMarketplace = {
+            record: loaded.record,
+            manifest: old.manifest,
+            location: cloneLocation(loaded.location, old.ref),
+          }
+          const oldEntry = findEntry(oldLoaded, record.plugin)
+          if (oldEntry) {
+            sourceEntry = oldEntry
+            sourceLoaded = oldLoaded
+          }
+        }
+      } catch {
+        // Fall back to the current manifest entry and let pluginFiles report the real failure.
+      }
+    }
+
+    const source = pluginLocation(sourceEntry, sourceLoaded)
+    if (source.kind !== "github" || !source.owner || !source.repo) {
+      throw new Error(
+        `Cannot resolve previous commit ${revision.commit}: the plugin source is not a GitHub repository. Nothing was changed.`,
+      )
+    }
+    location = { ...source, ref: revision.commit }
+    let files: PluginFiles
+    try {
+      files = await pluginFiles(location, true, sourceEntry)
+    } catch (error) {
+      throw new Error(
+        `Cannot resolve previous commit ${revision.commit}: ${message(error)}. Nothing was changed.`,
+        { cause: error },
+      )
+    }
+    // The current manifest's version describes the latest release, not the files at the old
+    // commit, so let the old plugin.json supply the version when the record has none.
+    extracted = extract({ ...sourceEntry, version: undefined }, files)
+  } else {
+    const current = pluginLocation(entry, loaded)
+    const files = await pluginFiles(current, true, entry)
+    const currentExtracted = extract(entry, files)
+    const latest = currentExtracted.version ?? entry.version
+    if (!revision.version || latest !== revision.version) {
+      throw new Error(
+        `Cannot resolve previous version ${revision.version ?? "unknown"}: the marketplace now offers ${latest ?? "no version"}. Nothing was changed.`,
+      )
+    }
+    location = current
+    extracted = currentExtracted
+  }
+
+  const version = revision.version ?? extracted.version ?? record.version
+  const commit = revision.commit ?? (await sourceCommit(location, true))
+  const installed = await installExtracted({
+    registry,
+    marketplace: marketplace.id,
+    marketplaceName: loaded.record.name,
+    plugin: entry.name ?? record.plugin,
+    ...(entry.displayName ? { displayName: entry.displayName } : {}),
+    ...(extracted.description ? { description: extracted.description } : {}),
+    ...(version ? { version } : {}),
+    ...(commit ? { commit } : {}),
+    scope: record.scope,
+    ...(record.project ? { project: record.project } : {}),
+    extracted,
+    adapt: record.adapt,
+    trackPrevious: true,
+  })
+  return {
+    ...updateBase(record),
+    ok: true,
+    ...(installed.skipped.length > 0 ? { skipped: installed.skipped } : {}),
+  }
 }
 
 function updateBase(record: InstalledRecord) {
@@ -2094,15 +2242,20 @@ export async function updateMarketplacePlugins(keys?: readonly string[]): Promis
   return results
 }
 
-export async function addMarketplace(url: string): Promise<{ record?: MarketplaceRecord; repository?: RepositoryInspection }> {
+export async function addMarketplace(
+  url: string,
+  ref?: string,
+): Promise<{ record?: MarketplaceRecord; repository?: RepositoryInspection }> {
   const value = url.trim()
   if (!value) throw new Error("Marketplace URL must not be empty")
-  const location = parseLocation(value)
+  const requestedRef = ref?.trim() || undefined
+  const location = parseLocation(value, requestedRef)
   const id = marketplaceID(value)
   const candidate: MarketplaceRecord = {
     id,
     url: parseGithub(value)?.canonical ?? (location.kind === "local" ? location.localPath : value),
     name: id,
+    ...(location.kind === "github" && requestedRef ? { ref: requestedRef } : {}),
     addedAt: new Date().toISOString(),
   }
   const { registry } = await readRegistry()

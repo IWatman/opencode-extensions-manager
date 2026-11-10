@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onMount, Show } from "solid-js"
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import {
   ManagerRpc,
   type InstalledPlugin,
@@ -10,11 +10,33 @@ import {
   type RepositoryProposal,
   type Scope,
 } from "../rpc"
-import { errorText, isRecord, type GuiContext } from "./helpers"
+import { errorText, isBuiltinMarketplaceUrl, isRecord, type GuiContext } from "./helpers"
 
 const catalogLimit = 80
 /** Must match the synthetic marketplace id used by the server for Claude Code imports. */
 const CLAUDE_MARKETPLACE_ID = "claude-code"
+const AUTO_REFRESH_KEY = "opencode-extensions-manager.marketplaces.auto-refresh"
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000
+
+function storedAutoRefresh() {
+  try {
+    return window.localStorage.getItem(AUTO_REFRESH_KEY) === "true"
+  } catch {
+    return false
+  }
+}
+
+function storeAutoRefresh(enabled: boolean) {
+  try {
+    window.localStorage.setItem(AUTO_REFRESH_KEY, String(enabled))
+  } catch {
+    // Private browsing or a restricted webview can reject storage; the toggle still works for this visit.
+  }
+}
+
+function revisionLabel(item: InstalledPlugin) {
+  return item.previousVersion || (item.previousCommit ? item.previousCommit.slice(0, 8) : "")
+}
 
 function repositorySummary(proposal: RepositoryProposal) {
   if (proposal.kind === "plugin") return proposal.package ?? ""
@@ -41,7 +63,9 @@ export function MarketplacesSection(props: {
   const [marketplaces, setMarketplaces] = createSignal<readonly MarketplaceInfo[]>([])
   const [loading, setLoading] = createSignal(false)
   const [addUrl, setAddUrl] = createSignal("")
+  const [addRef, setAddRef] = createSignal("")
   const [adding, setAdding] = createSignal(false)
+  const [autoRefresh, setAutoRefresh] = createSignal(storedAutoRefresh())
   const [selected, setSelected] = createSignal<string>()
   const [catalog, setCatalog] = createSignal<readonly MarketplacePlugin[]>([])
   const [catalogLoading, setCatalogLoading] = createSignal(false)
@@ -68,6 +92,7 @@ export function MarketplacesSection(props: {
     skipped && skipped.length > 0 ? `${message}. ${skipped.join("; ")}` : message
   let marketplaceGeneration = 0
   let catalogGeneration = 0
+  let autoRefreshTimer: number | undefined
 
   const loadMarketplaces = async (refresh = false) => {
     const current = ++marketplaceGeneration
@@ -83,10 +108,10 @@ export function MarketplacesSection(props: {
     }
   }
 
-  const openCatalog = async (marketplace: string, refresh = false) => {
+  const openCatalog = async (marketplace: string, refresh = false, resetQuery = true) => {
     const current = ++catalogGeneration
     setSelected(marketplace)
-    setQuery("")
+    if (resetQuery) setQuery("")
     setCatalog([])
     setCatalogError(undefined)
     setCatalogLoading(true)
@@ -109,9 +134,22 @@ export function MarketplacesSection(props: {
   const add = async () => {
     const url = addUrl().trim()
     if (!url) return
+    if (!isBuiltinMarketplaceUrl(url)) {
+      const confirmed = await ctx.dialogs.confirm({
+        title: ctx.t("marketplaces.trustTitle"),
+        description: ctx.t("marketplaces.trustDescription", { url }),
+        confirm: ctx.t("marketplaces.trustConfirm"),
+      })
+      if (!confirmed) return
+    }
+    const ref = addRef().trim()
     setAdding(true)
     try {
-      const result = await ctx.client.rpc(ManagerRpc).addMarketplace({ url, ...target() })
+      const result = await ctx.client.rpc(ManagerRpc).addMarketplace({
+        url,
+        ...(ref ? { ref } : {}),
+        ...target(),
+      })
       if (result.kind === "repository" && result.repository) {
         const repository = result.repository
         ctx.dialogs.open((dialog) => (
@@ -134,6 +172,7 @@ export function MarketplacesSection(props: {
         ctx.t("marketplaces.added", { name: result.marketplace?.name ?? url }),
       )
       setAddUrl("")
+      setAddRef("")
       await loadMarketplaces(true)
     } catch (error) {
       props.failed(error)
@@ -197,6 +236,36 @@ export function MarketplacesSection(props: {
         ...target(),
       })
       props.saved(next, ctx.t("marketplaces.pluginUpdated", { name: item.displayName ?? item.plugin }))
+    } catch (error) {
+      props.failed(error)
+    } finally {
+      props.setBusy(undefined)
+    }
+  }
+
+  const rollbackInstalled = async (item: InstalledPlugin) => {
+    const name = item.displayName ?? item.plugin
+    const confirmed = await ctx.dialogs.confirm({
+      title: ctx.t("marketplaces.rollbackTitle"),
+      description: ctx.t("marketplaces.rollbackDescription", {
+        name,
+        revision: revisionLabel(item),
+      }),
+      confirm: ctx.t("marketplaces.rollback"),
+      danger: true,
+    })
+    if (!confirmed) return
+    const key = `installed:${item.key}`
+    props.setBusy(key)
+    try {
+      const output = await ctx.client.rpc(ManagerRpc).rollbackMarketplacePlugin({
+        key: item.key,
+        ...target(),
+      })
+      props.saved(
+        output.state,
+        withSkipped(ctx.t("marketplaces.rollbackDone", { name }), output.result.skipped),
+      )
     } catch (error) {
       props.failed(error)
     } finally {
@@ -276,9 +345,30 @@ export function MarketplacesSection(props: {
       plugins: item.plugins.length,
     })
 
+  const stopAutoRefresh = () => {
+    if (autoRefreshTimer !== undefined) window.clearInterval(autoRefreshTimer)
+    autoRefreshTimer = undefined
+  }
+
+  const refreshCatalog = () => {
+    void loadMarketplaces(true)
+    const current = selected()
+    if (current) void openCatalog(current, true, false)
+  }
+
+  const toggleAutoRefresh = (enabled: boolean) => {
+    setAutoRefresh(enabled)
+    storeAutoRefresh(enabled)
+    stopAutoRefresh()
+    if (enabled) autoRefreshTimer = window.setInterval(refreshCatalog, AUTO_REFRESH_INTERVAL)
+  }
+
   onMount(() => {
     void loadMarketplaces()
+    if (autoRefresh()) autoRefreshTimer = window.setInterval(refreshCatalog, AUTO_REFRESH_INTERVAL)
   })
+
+  onCleanup(stopAutoRefresh)
 
   return (
     <>
@@ -292,7 +382,12 @@ export function MarketplacesSection(props: {
       >
         <ctx.ui.SettingsRow
           title={ctx.t("marketplaces.add")}
-          description={ctx.t("marketplaces.addHint")}
+          description={
+            <span class="oem-description">
+              <span>{ctx.t("marketplaces.addHint")}</span>
+              <span class="oem-hint">{ctx.t("marketplaces.refHint")}</span>
+            </span>
+          }
           id="oem-marketplace-add"
         >
           <div class="oem-actions oem-actions-wide">
@@ -304,10 +399,31 @@ export function MarketplacesSection(props: {
               placeholder="https://github.com/anthropics/claude-plugins-official"
               class="oem-input"
             />
+            <ctx.ui.TextInput
+              value={addRef()}
+              onInput={setAddRef}
+              onSubmit={() => void add()}
+              label={ctx.t("marketplaces.ref")}
+              placeholder="main / v1.2.0"
+              class="oem-input oem-input-ref"
+            />
             <ctx.ui.Button icon="plus" size="small" busy={adding()} onClick={() => void add()}>
               {ctx.t("common.add")}
             </ctx.ui.Button>
           </div>
+        </ctx.ui.SettingsRow>
+
+        <ctx.ui.SettingsRow
+          id="oem-marketplace-auto-refresh"
+          title={ctx.t("marketplaces.autoRefresh")}
+          description={ctx.t("marketplaces.autoRefreshHint")}
+        >
+          <ctx.ui.Switch
+            checked={autoRefresh()}
+            onChange={toggleAutoRefresh}
+            label={ctx.t("marketplaces.autoRefresh")}
+            hideLabel
+          />
         </ctx.ui.SettingsRow>
 
         <Show when={loading()}>
@@ -331,6 +447,12 @@ export function MarketplacesSection(props: {
                     <span>{marketplace.name}</span>
                     <Show when={marketplace.builtin}>
                       <span class="oem-badge">{ctx.t("marketplaces.builtin")}</span>
+                    </Show>
+                    <Show when={!marketplace.builtin}>
+                      <span class="oem-badge">{ctx.t("marketplaces.thirdParty")}</span>
+                    </Show>
+                    <Show when={!marketplace.builtin && marketplace.ref}>
+                      <span class="oem-badge">{ctx.t("marketplaces.refBadge", { ref: marketplace.ref! })}</span>
                     </Show>
                     <Show when={marketplace.pluginCount !== undefined}>
                       <span class="oem-badge">
@@ -412,6 +534,11 @@ export function MarketplacesSection(props: {
                       <Show when={item.version}>
                         <span class="oem-badge">{item.version}</span>
                       </Show>
+                      <Show when={item.previousVersion || item.previousCommit}>
+                        <span class="oem-badge">
+                          {ctx.t("marketplaces.previousRevision", { revision: revisionLabel(item) })}
+                        </span>
+                      </Show>
                       <span class="oem-badge">{scopeLabel()}</span>
                     </span>
                   }
@@ -450,6 +577,15 @@ export function MarketplacesSection(props: {
                         label={ctx.t("marketplaces.update")}
                         disabled={props.busy === key()}
                         onClick={() => void updateInstalled(item)}
+                      />
+                    </Show>
+                    <Show when={item.previousCommit || item.previousVersion}>
+                      <ctx.ui.IconButton
+                        icon="outline-undo"
+                        size="small"
+                        label={ctx.t("marketplaces.rollback")}
+                        disabled={props.busy === key()}
+                        onClick={() => void rollbackInstalled(item)}
                       />
                     </Show>
                     <ctx.ui.IconButton

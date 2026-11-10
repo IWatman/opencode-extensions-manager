@@ -164,3 +164,85 @@ export function formatJson(value: unknown) {
     return String(value)
   }
 }
+
+/** Placeholder that replaces credentials in copied MCP configuration. */
+export const SECRET_MASK = "***"
+
+/** Header and environment names that usually carry credentials. */
+const secretKeyPattern = /(authorization|token|api[-_]?key|secret|password|passwd|cookie)/i
+
+export function isSecretKey(key: string) {
+  return secretKeyPattern.test(key.trim())
+}
+
+/** True when a config stores at least one credential-like header. */
+export function hasSecretHeaders(config: unknown) {
+  if (!isRecord(config) || !isRecord(config.headers)) return false
+  return Object.keys(config.headers).some(isSecretKey)
+}
+
+function stringEntries(value: unknown) {
+  if (!isRecord(value)) return []
+  return Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+}
+
+export function mcpHasPairs(config: unknown) {
+  return isRecord(config) && (stringEntries(config.environment).length > 0 || stringEntries(config.headers).length > 0)
+}
+
+/**
+ * Compact row text for environment variables and headers. Values stay hidden until the user
+ * explicitly reveals them, so a screenshot or a shared screen never shows a token by accident.
+ */
+export function maskedMcpPairs(config: unknown, reveal = false) {
+  if (!isRecord(config)) return ""
+  const lines: string[] = []
+  for (const [label, pairs] of [
+    ["environment", config.environment],
+    ["headers", config.headers],
+  ] as const) {
+    for (const [key, value] of stringEntries(pairs)) {
+      lines.push(`${label}.${key}=${reveal ? value : SECRET_MASK}`)
+    }
+  }
+  return lines.join("\n")
+}
+
+/**
+ * Returns a copy of an MCP config with environment values, header values, and an OAuth client
+ * secret replaced by `***`. Everything else, such as the command and URL, stays readable so the
+ * result can be shared when asking for help.
+ */
+export function sanitizeMcpConfig(config: unknown): unknown {
+  if (!isRecord(config)) return config
+  const next: Record<string, unknown> = { ...config }
+  for (const field of ["environment", "headers"] as const) {
+    const pairs = next[field]
+    if (!isRecord(pairs)) continue
+    next[field] = Object.fromEntries(
+      Object.entries(pairs).map(([key, value]) => [key, typeof value === "string" ? SECRET_MASK : value]),
+    )
+  }
+  if (isRecord(config.oauth) && typeof config.oauth.client_secret === "string") {
+    next.oauth = { ...config.oauth, client_secret: SECRET_MASK }
+  }
+  return next
+}
+
+/** The built-in Anthropic marketplace is the only source that does not need a trust prompt. */
+export function isBuiltinMarketplaceUrl(url: string) {
+  const value = url
+    .trim()
+    .toLowerCase()
+    .replace(/^git\+/, "")
+    .replace(/^github:/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\.git$/, "")
+    .replace(/\/+$/, "")
+  const repository = value.replace(/\/tree\/.*$/, "")
+  return (
+    repository === "github.com/anthropics/claude-plugins-official" ||
+    repository === "anthropics/claude-plugins-official"
+  )
+}

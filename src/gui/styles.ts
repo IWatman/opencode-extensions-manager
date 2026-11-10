@@ -102,6 +102,13 @@ export const styles = `
   white-space: pre-wrap;
 }
 
+.oem-warning {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #d29922;
+  overflow-wrap: anywhere;
+}
+
 .oem-actions {
   display: flex;
   align-items: center;
@@ -126,6 +133,7 @@ export const styles = `
 }
 
 .oem-input { flex: 1; min-width: 220px; }
+.oem-input-ref { flex: 0 1 180px; min-width: 140px; }
 
 .oem-footer {
   display: flex;
