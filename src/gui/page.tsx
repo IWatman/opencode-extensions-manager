@@ -1,6 +1,6 @@
-import { createEffect, createSignal, For, Match, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import type { IconName } from "@opencode/plugin/gui"
-import { ManagerRpc, type ManagerState, type Scope } from "../rpc"
+import { ManagerRpc, type ManagerState, type MarketplacePlugin, type Scope } from "../rpc"
 import { AboutSection } from "./about"
 import { ClaudeImportSection } from "./claude"
 import { DoctorSection } from "./doctor"
@@ -8,10 +8,22 @@ import { errorText, revealPath, runtimeStatus, type GuiContext } from "./helpers
 import { McpSection, type McpStatusMap } from "./mcp"
 import { MarketplacesSection } from "./marketplaces"
 import { PluginsSection } from "./plugins"
+import {
+  buildSearchRecords,
+  groupSearchResults,
+  searchRecords,
+  type SearchFilter,
+  type SearchFocus,
+  type SearchRecord,
+} from "./search"
+import { SearchPanel } from "./search-panel"
 import { SkillsSection } from "./skills"
+import { SkeletonRows } from "./ui"
 import { UpdatesSection } from "./updates"
 
 type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "about"
+
+const tabOrder: readonly Tab[] = ["overview", "mcp", "plugins", "skills", "marketplaces", "about"]
 
 interface TabItem {
   readonly id: Tab
@@ -44,6 +56,13 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
   const [busy, setBusy] = createSignal<string>()
   const [statuses, setStatuses] = createSignal<Record<Scope, McpStatusMap>>({ global: {}, project: {} })
   const [tab, setTab] = createSignal<Tab>(tabFromTarget(props.target))
+  const [search, setSearch] = createSignal("")
+  const [searchFilter, setSearchFilter] = createSignal<SearchFilter>("all")
+  const [catalogs, setCatalogs] = createSignal<Record<string, readonly MarketplacePlugin[]>>({})
+  const [catalogLoading, setCatalogLoading] = createSignal(false)
+  const [catalogError, setCatalogError] = createSignal(false)
+  const [catalogFocus, setCatalogFocus] = createSignal<SearchFocus>()
+  const catalogAttempts = new Set<string>()
 
   let generation = 0
 
@@ -129,6 +148,94 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
   }
   const allEmpty = () => mcp().length + plugins().length + skills().length + installed().length === 0
 
+  const globalSearchRecords = createMemo(() => {
+    const current = state()
+    return current ? buildSearchRecords(current, catalogs()) : []
+  })
+  const searchGroups = createMemo(() =>
+    groupSearchResults(searchRecords(globalSearchRecords(), search(), searchFilter())),
+  )
+
+  const loadCatalogs = async () => {
+    const pending = marketplaces().filter((marketplace) => !catalogAttempts.has(marketplace.id))
+    if (pending.length === 0) return
+    for (const marketplace of pending) catalogAttempts.add(marketplace.id)
+    setCatalogLoading(true)
+    try {
+      const path = project()?.trim()
+      const results = await Promise.allSettled(
+        pending.map((marketplace) =>
+          ctx.client.rpc(ManagerRpc).catalog({
+            marketplace: marketplace.id,
+            scope: scope(),
+            ...(path ? { project: path } : {}),
+          }),
+        ),
+      )
+      const next = { ...catalogs() }
+      let failed = false
+      results.forEach((result, index) => {
+        const marketplace = pending[index]!
+        if (result.status === "fulfilled") next[marketplace.id] = result.value.plugins
+        else failed = true
+      })
+      setCatalogs(next)
+      setCatalogError(failed)
+    } catch {
+      setCatalogError(true)
+    } finally {
+      setCatalogLoading(false)
+    }
+  }
+
+  createEffect(() => {
+    const query = search().trim()
+    const filter = searchFilter()
+    if (query.length < 2) return
+    if (filter !== "all" && filter !== "marketplaces") return
+    if (!state() || marketplaces().length === 0) return
+    void loadCatalogs()
+  })
+
+  const revealElement = (id: string, attempt = 0) => {
+    window.setTimeout(
+      () => {
+        const element = document.getElementById(id)
+        if (!element) {
+          if (attempt < 6) revealElement(id, attempt + 1)
+          return
+        }
+        element.scrollIntoView({ block: "center", behavior: "smooth" })
+        element.classList.add("oem-focus")
+        window.setTimeout(() => element.classList.remove("oem-focus"), 1800)
+      },
+      attempt === 0 ? 100 : 150,
+    )
+  }
+
+  const changeSearch = (value: string) => {
+    setSearch(value)
+    if (value.trim() && tab() !== "overview") setTab("overview")
+  }
+
+  const pickSearchResult = (record: SearchRecord) => {
+    if (record.scope) setScope(record.scope)
+    setTab(record.tab)
+    setSearch("")
+    if (record.category === "catalog" && record.marketplace && record.plugin) {
+      setCatalogFocus({
+        kind: "catalog",
+        marketplace: record.marketplace,
+        plugin: record.plugin,
+        elementId: record.elementId,
+        nonce: Date.now(),
+      })
+      return
+    }
+    setCatalogFocus(undefined)
+    revealElement(record.elementId)
+  }
+
   const count = (value: number) => (value > 0 ? { count: value } : {})
   const tabItems = (): TabItem[] => [
     { id: "overview", label: ctx.t("tabs.overview"), icon: "dot-grid" },
@@ -174,6 +281,25 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
 
   onMount(() => {
     void refresh()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return
+      const target = event.target
+      if (target instanceof HTMLElement) {
+        if (target.isContentEditable) return
+        const tag = target.tagName
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      }
+      const match = /^Digit([1-6])$/.exec(event.code)
+      if (!match) return
+      const next = tabOrder[Number(match[1]) - 1]
+      if (!next) return
+      event.preventDefault()
+      setTab(next)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    onCleanup(() => window.removeEventListener("keydown", onKeyDown))
   })
 
   return (
@@ -196,15 +322,37 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
         when={state()}
         fallback={
           <ctx.ui.SettingsSection>
-            <ctx.ui.SettingsRow title={ctx.t("common.loading")}>
-              <ctx.ui.Loader size="small" />
-            </ctx.ui.SettingsRow>
+            <div role="status" aria-label={ctx.t("common.loading")}>
+              <SkeletonRows count={4} />
+            </div>
           </ctx.ui.SettingsSection>
         }
       >
         {(current) => (
           <>
             <div class="oem-toolbar">
+              <div class="oem-toolbar-item oem-toolbar-search">
+                <ctx.ui.TextInput
+                  type="search"
+                  value={search()}
+                  onInput={changeSearch}
+                  onSubmit={() => {
+                    if (search().trim()) setTab("overview")
+                  }}
+                  label={ctx.t("search.label")}
+                  placeholder={ctx.t("search.placeholder")}
+                  class="oem-input"
+                />
+                <Show when={search()}>
+                  <ctx.ui.IconButton
+                    icon="close-small"
+                    size="small"
+                    label={ctx.t("search.clear")}
+                    onClick={() => setSearch("")}
+                  />
+                </Show>
+              </div>
+
               <div class="oem-toolbar-item">
                 <span class="oem-toolbar-label">{ctx.t("common.scope")}</span>
                 <ctx.ui.Select
@@ -256,11 +404,12 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
 
             <div class="oem-tabs" role="tablist" aria-label={ctx.t("page.title")}>
               <For each={tabItems()}>
-                {(item) => (
+                {(item, index) => (
                   <button
                     type="button"
                     role="tab"
                     aria-selected={tab() === item.id}
+                    aria-keyshortcuts={`Alt+${index() + 1}`}
                     class={`oem-tab${tab() === item.id ? " oem-tab-active" : ""}`}
                     onClick={() => setTab(item.id)}
                   >
@@ -273,9 +422,23 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                 )}
               </For>
             </div>
+            <span class="oem-hint oem-tab-hint">{ctx.t("hotkeys.tabs")}</span>
 
             <Switch>
               <Match when={tab() === "overview"}>
+                <Show when={search().trim()}>
+                  <SearchPanel
+                    ctx={ctx}
+                    query={search()}
+                    filter={searchFilter()}
+                    groups={searchGroups()}
+                    loading={catalogLoading()}
+                    catalogError={catalogError()}
+                    onFilter={setSearchFilter}
+                    onPick={pickSearchResult}
+                  />
+                </Show>
+
                 <UpdatesSection
                   ctx={ctx}
                   project={project()}
@@ -435,6 +598,7 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                   setBusy={setBusy}
                   saved={saved}
                   failed={failed}
+                  focus={catalogFocus()}
                 />
               </Match>
 

@@ -21,6 +21,24 @@ interface UpdateResult {
   readonly error?: string
 }
 
+type UpdateSource = "marketplace" | "packages" | "claude"
+
+interface UpdateProgress {
+  readonly source: UpdateSource
+  readonly current: number
+  readonly total: number
+  readonly name: string
+}
+
+type SourceProgress = Record<UpdateSource, number>
+
+interface UpdateSummary {
+  readonly ok: number
+  readonly failed: number
+  readonly skipped: number
+  readonly total: number
+}
+
 export function UpdatesSection(props: {
   ctx: GuiContext
   project: string | undefined
@@ -38,11 +56,35 @@ export function UpdatesSection(props: {
   const [claude, setClaude] = createSignal<readonly ClaudeUpdate[]>([])
   const [updating, setUpdating] = createSignal(false)
   const [results, setResults] = createSignal<readonly UpdateResult[]>([])
+  const [progress, setProgress] = createSignal<UpdateProgress>()
+  const [sourceDone, setSourceDone] = createSignal<SourceProgress>({ marketplace: 0, packages: 0, claude: 0 })
+  const [sourceTotal, setSourceTotal] = createSignal<SourceProgress>({ marketplace: 0, packages: 0, claude: 0 })
+  const [finished, setFinished] = createSignal<UpdateSummary>()
 
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
   const pluginLocation = () =>
     props.project?.trim() ? { location: { directory: props.project.trim() } } : {}
   const total = () => marketplace().length + packages().length + claude().length
+  const progressPercent = () => {
+    const current = progress()
+    if (!current || current.total === 0) return 0
+    return Math.min(100, Math.round((current.current / current.total) * 100))
+  }
+  const sourceLine = () => {
+    const done = sourceDone()
+    const all = sourceTotal()
+    return [
+      ...(all.marketplace > 0
+        ? [ctx.t("updates.sourceMarketplace", { done: done.marketplace, total: all.marketplace })]
+        : []),
+      ...(all.packages > 0
+        ? [ctx.t("updates.sourcePackages", { done: done.packages, total: all.packages })]
+        : []),
+      ...(all.claude > 0
+        ? [ctx.t("updates.sourceClaude", { done: done.claude, total: all.claude })]
+        : []),
+    ].join(" · ")
+  }
   const scopeLabel = (scope: Scope) => ctx.t(scope === "global" ? "scope.global" : "scope.project")
   const shortCommit = (value: string) => (value.length > 10 ? value.slice(0, 7) : value)
 
@@ -143,12 +185,21 @@ export function UpdatesSection(props: {
     if (total() === 0) return
     setUpdating(true)
     setResults([])
+    setFinished(undefined)
+    setProgress(undefined)
+    setSourceTotal({
+      marketplace: marketplace().length,
+      packages: packages().length,
+      claude: claude().length,
+    })
+    setSourceDone({ marketplace: 0, packages: 0, claude: 0 })
     try {
       await applyUpdates()
     } catch (error) {
       props.failed(error)
     } finally {
       setUpdating(false)
+      setProgress(undefined)
     }
   }
 
@@ -157,9 +208,24 @@ export function UpdatesSection(props: {
     let lastState: ManagerState | undefined
     let updated = 0
     let failed = 0
+    let done = 0
+    const totalCount = total()
+
+    const advance = (name: string, source: UpdateSource) => {
+      done += 1
+      setProgress({ source, current: done, total: totalCount, name })
+      setSourceDone((previous) => ({ ...previous, [source]: previous[source] + 1 }))
+    }
 
     const marketKeys = marketplace().map((item) => item.key)
     if (marketKeys.length > 0) {
+      const first = marketplace()[0]
+      setProgress({
+        source: "marketplace",
+        current: Math.min(done + 1, totalCount),
+        total: totalCount,
+        name: first ? first.displayName ?? first.plugin : "",
+      })
       try {
         const output = await ctx.client.rpc(ManagerRpc).updateAllMarketplacePlugins({
           keys: marketKeys,
@@ -176,6 +242,7 @@ export function UpdatesSection(props: {
           })
           if (result.ok) updated++
           else failed++
+          advance(result.displayName ?? result.plugin, "marketplace")
         }
       } catch (error) {
         for (const item of marketplace()) {
@@ -186,17 +253,25 @@ export function UpdatesSection(props: {
             error: errorText(error),
           })
           failed++
+          advance(item.displayName ?? item.plugin, "marketplace")
         }
       }
     }
 
     const packageTargets = packages().map((item) => item.target)
     if (packageTargets.length > 0) {
+      setProgress({
+        source: "packages",
+        current: Math.min(done + 1, totalCount),
+        total: totalCount,
+        name: packageTargets[0] ?? "",
+      })
       try {
         await ctx.client.plugin.update({ targets: packageTargets, ...pluginLocation() })
         for (const item of packages()) {
           collected.push({ key: `package:${item.target}`, name: item.target, ok: true })
           updated++
+          advance(item.target, "packages")
         }
       } catch (error) {
         for (const item of packages()) {
@@ -207,6 +282,7 @@ export function UpdatesSection(props: {
             error: errorText(error),
           })
           failed++
+          advance(item.target, "packages")
         }
       }
     }
@@ -224,6 +300,13 @@ export function UpdatesSection(props: {
       groups.set(key, group)
     }
     for (const group of groups.values()) {
+      const first = group.items[0]
+      setProgress({
+        source: "claude",
+        current: Math.min(done + 1, totalCount),
+        total: totalCount,
+        name: first ? first.name : "",
+      })
       try {
         const output = await ctx.client.rpc(ManagerRpc).installClaudePlugins({
           scope: group.scope,
@@ -248,6 +331,7 @@ export function UpdatesSection(props: {
           })
           if (result.ok) updated++
           else failed++
+          advance(result.name, "claude")
         }
       } catch (error) {
         for (const item of group.items) {
@@ -258,13 +342,16 @@ export function UpdatesSection(props: {
             error: errorText(error),
           })
           failed++
+          advance(item.name, "claude")
         }
       }
     }
 
     setResults(collected)
     const skipped = collected.filter((item) => item.ok && item.skipped && item.skipped.length > 0).length
+    setFinished({ ok: updated, failed, skipped, total: collected.length })
     const summary = ctx.t("updates.summary", { updated, failed, skipped })
+
     if (updated > 0 && lastState) {
       props.saved(lastState, summary)
     } else if (updated > 0) {
@@ -353,6 +440,27 @@ export function UpdatesSection(props: {
         </div>
       </ctx.ui.SettingsRow>
 
+      <Show when={updating()}>
+        <ctx.ui.SettingsRow
+          title={ctx.t("updates.progress", {
+            current: progress()?.current ?? 0,
+            total: progress()?.total ?? total(),
+            name: progress()?.name ?? "",
+          })}
+          description={
+            <span class="oem-description">
+              <span class="oem-hint">{sourceLine()}</span>
+              <span class="oem-progress">
+                <span
+                  class="oem-progress-bar"
+                  style={{ width: `${progressPercent()}%` }}
+                />
+              </span>
+            </span>
+          }
+        />
+      </Show>
+
       <Show when={!checkedAt() && !checking()}>
         <ctx.ui.SettingsRow title={<span class="oem-muted">{ctx.t("updates.notChecked")}</span>} />
       </Show>
@@ -439,6 +547,17 @@ export function UpdatesSection(props: {
             />
           )}
         </For>
+      </Show>
+
+      <Show when={finished() && !updating()}>
+        <ctx.ui.SettingsRow
+          title={ctx.t("updates.doneSummary", {
+            ok: finished()!.ok,
+            total: finished()!.total,
+            failed: finished()!.failed,
+            skipped: finished()!.skipped,
+          })}
+        />
       </Show>
 
       <Show when={results().length > 0}>

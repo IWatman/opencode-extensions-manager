@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js"
 import {
   ManagerRpc,
   type InstalledPlugin,
@@ -11,6 +11,9 @@ import {
   type Scope,
 } from "../rpc"
 import { errorText, isRecord, type GuiContext } from "./helpers"
+import { readSortPreference, sortItems, writeSortPreference, type SortKey } from "./list"
+import { SortControl, SkeletonRows } from "./ui"
+import type { SearchFocus } from "./search"
 
 const catalogLimit = 80
 /** Must match the synthetic marketplace id used by the server for Claude Code imports. */
@@ -36,6 +39,7 @@ export function MarketplacesSection(props: {
   setBusy: (key: string | undefined) => void
   saved: (next: ManagerState, message: string) => void
   failed: (error: unknown) => void
+  focus?: SearchFocus
 }) {
   const ctx = props.ctx
   const [marketplaces, setMarketplaces] = createSignal<readonly MarketplaceInfo[]>([])
@@ -47,9 +51,31 @@ export function MarketplacesSection(props: {
   const [catalogLoading, setCatalogLoading] = createSignal(false)
   const [catalogError, setCatalogError] = createSignal<string>()
   const [query, setQuery] = createSignal("")
+  const storage = (() => {
+    try {
+      return window.localStorage
+    } catch {
+      return undefined
+    }
+  })()
+  const [sort, setSort] = createSignal<SortKey>(
+    readSortPreference(storage, "oem.sort.installed", ["name", "scope", "status"], "name"),
+  )
+
+  const changeSort = (value: SortKey) => {
+    setSort(value)
+    writeSortPreference(storage, "oem.sort.installed", value)
+  }
 
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
   const installed = () => props.state.installedPlugins
+  const sortedInstalled = createMemo(() =>
+    sortItems(installed(), sort(), {
+      name: (item) => item.displayName ?? item.plugin,
+      scope: (item) => item.scope,
+      status: (item) => (item.enabled ? 0 : 1),
+    }),
+  )
   const projectRoot = () => props.state.project?.root ?? props.project?.trim()
   const selectedMarketplace = createMemo(() => marketplaces().find((item) => item.id === selected()))
   /**
@@ -276,6 +302,25 @@ export function MarketplacesSection(props: {
       plugins: item.plugins.length,
     })
 
+  const revealElement = (id: string, attempt = 0) => {
+    window.setTimeout(() => {
+      const element = document.getElementById(id)
+      if (!element) {
+        if (attempt < 6) revealElement(id, attempt + 1)
+        return
+      }
+      element.scrollIntoView({ block: "center", behavior: "smooth" })
+      element.classList.add("oem-focus")
+      window.setTimeout(() => element.classList.remove("oem-focus"), 1800)
+    }, 120)
+  }
+
+  createEffect(() => {
+    const focus = props.focus
+    if (!focus) return
+    void openCatalog(focus.marketplace).then(() => revealElement(focus.elementId))
+  })
+
   onMount(() => {
     void loadMarketplaces()
   })
@@ -311,9 +356,9 @@ export function MarketplacesSection(props: {
         </ctx.ui.SettingsRow>
 
         <Show when={loading()}>
-          <ctx.ui.SettingsRow title={ctx.t("common.loading")}>
-            <ctx.ui.Loader size="small" />
-          </ctx.ui.SettingsRow>
+          <div role="status" aria-label={ctx.t("common.loading")}>
+            <SkeletonRows count={3} />
+          </div>
         </Show>
 
         <Show when={!loading() && marketplaces().length === 0}>
@@ -387,6 +432,20 @@ export function MarketplacesSection(props: {
       </ctx.ui.SettingsSection>
 
       <ctx.ui.SettingsSection title={`${ctx.t("marketplaces.installedTitle")} (${installed().length})`}>
+        <Show when={installed().length > 0}>
+          <div class="oem-list-header">
+            <SortControl
+              ctx={ctx}
+              value={sort()}
+              options={[
+                { value: "name", label: ctx.t("sort.name") },
+                { value: "scope", label: ctx.t("sort.scope") },
+                { value: "status", label: ctx.t("sort.status") },
+              ]}
+              onChange={changeSort}
+            />
+          </div>
+        </Show>
         <Show
           when={installed().length > 0}
           fallback={
@@ -396,7 +455,7 @@ export function MarketplacesSection(props: {
             />
           }
         >
-          <For each={installed()}>
+          <For each={sortedInstalled()}>
             {(item) => {
               const key = () => `installed:${item.key}`
               const scopeLabel = () =>
@@ -496,9 +555,9 @@ export function MarketplacesSection(props: {
           </ctx.ui.SettingsRow>
 
           <Show when={catalogLoading()}>
-            <ctx.ui.SettingsRow title={ctx.t("common.loading")}>
-              <ctx.ui.Loader size="small" />
-            </ctx.ui.SettingsRow>
+            <div role="status" aria-label={ctx.t("common.loading")}>
+              <SkeletonRows count={4} />
+            </div>
           </Show>
 
           <Show when={catalogError()}>

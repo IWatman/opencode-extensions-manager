@@ -365,6 +365,52 @@ export const catalog: Catalog = {
 
     "footer.note":
       "OpenCode watches these files and reloads extensions automatically after a change. Restart the app if a plugin keeps running its old code.",
+
+    "search.label": "Search everything",
+    "search.placeholder": "Search MCP, plugins, skills, marketplaces…",
+    "search.clear": "Clear search",
+    "search.results": "{{count}} results",
+    "search.empty": "No matches for “{{query}}”.",
+    "search.loadingCatalogs": "Searching marketplace catalogs…",
+    "search.catalogError": "Some marketplace catalogs could not be loaded.",
+    "search.more": "{{count}} more in this category",
+    "search.filter": "Search filter",
+    "search.filter.all": "All",
+    "search.filter.mcp": "MCP",
+    "search.filter.plugins": "Plugins",
+    "search.filter.skills": "Skills",
+    "search.filter.marketplaces": "Marketplaces",
+    "search.group.mcp": "MCP servers",
+    "search.group.plugins": "Plugins",
+    "search.group.skills": "Skills",
+    "search.group.marketplace": "Marketplaces",
+    "search.group.catalog": "Marketplace catalog",
+    "search.group.installed": "Installed plugins",
+
+    "bulk.selectAll": "Select all",
+    "bulk.selected": "{{count}} selected",
+    "bulk.enable": "Enable",
+    "bulk.disable": "Disable",
+    "bulk.delete": "Delete selected",
+    "bulk.progress": "Working on {{current}} of {{total}}: {{name}}",
+    "bulk.deleteProgress": "Deleting {{current}} of {{total}}: {{name}}",
+    "bulk.deleteTitle": "Delete selected items?",
+    "bulk.deleteDescription": "{{count}} items will be removed from {{scope}} config. A .bak backup is kept.",
+    "bulk.summary": "{{ok}} succeeded, {{failed}} failed",
+
+    "sort.label": "Sort",
+    "sort.name": "Name",
+    "sort.scope": "Scope",
+    "sort.status": "Status",
+
+    "updates.progress": "Updating {{current}} of {{total}}: {{name}}",
+    "updates.sourceMarketplace": "Marketplaces {{done}}/{{total}}",
+    "updates.sourcePackages": "Plugins {{done}}/{{total}}",
+    "updates.sourceClaude": "Claude Code {{done}}/{{total}}",
+    "updates.doneSummary":
+      "Finished: {{ok}} of {{total}} updated, {{failed}} failed, {{skipped}} with kept artifacts",
+
+    "hotkeys.tabs": "Alt+1 … Alt+6 switch tabs",
   },
 
   ru: {
@@ -724,6 +770,53 @@ export const catalog: Catalog = {
 
     "footer.note":
       "OpenCode следит за этими файлами и перезагружает расширения после изменений. Если плагин продолжает работать по-старому, перезапустите приложение.",
+
+    "search.label": "Поиск по всему",
+    "search.placeholder": "Поиск по MCP, плагинам, навыкам, маркетплейсам…",
+    "search.clear": "Очистить поиск",
+    "search.results": "Результатов: {{count}}",
+    "search.empty": "По запросу «{{query}}» ничего не найдено.",
+    "search.loadingCatalogs": "Поиск в каталогах маркетплейсов…",
+    "search.catalogError": "Не удалось загрузить некоторые каталоги маркетплейсов.",
+    "search.more": "Ещё {{count}} в этой категории",
+    "search.filter": "Фильтр поиска",
+    "search.filter.all": "Все",
+    "search.filter.mcp": "MCP",
+    "search.filter.plugins": "Плагины",
+    "search.filter.skills": "Навыки",
+    "search.filter.marketplaces": "Маркетплейсы",
+    "search.group.mcp": "MCP-серверы",
+    "search.group.plugins": "Плагины",
+    "search.group.skills": "Навыки",
+    "search.group.marketplace": "Маркетплейсы",
+    "search.group.catalog": "Каталог маркетплейса",
+    "search.group.installed": "Установленные плагины",
+
+    "bulk.selectAll": "Выбрать все",
+    "bulk.selected": "Выбрано: {{count}}",
+    "bulk.enable": "Включить",
+    "bulk.disable": "Отключить",
+    "bulk.delete": "Удалить выбранные",
+    "bulk.progress": "Обработка {{current}} из {{total}}: {{name}}",
+    "bulk.deleteProgress": "Удаление {{current}} из {{total}}: {{name}}",
+    "bulk.deleteTitle": "Удалить выбранные элементы?",
+    "bulk.deleteDescription":
+      "Элементов будет удалено из конфигурации «{{scope}}»: {{count}}. Резервная копия .bak сохранится.",
+    "bulk.summary": "Успешно: {{ok}}, с ошибкой: {{failed}}",
+
+    "sort.label": "Сортировка",
+    "sort.name": "По имени",
+    "sort.scope": "По области",
+    "sort.status": "По статусу",
+
+    "updates.progress": "Обновление {{current}} из {{total}}: {{name}}",
+    "updates.sourceMarketplace": "Маркетплейсы {{done}}/{{total}}",
+    "updates.sourcePackages": "Плагины {{done}}/{{total}}",
+    "updates.sourceClaude": "Claude Code {{done}}/{{total}}",
+    "updates.doneSummary":
+      "Готово: обновлено {{ok}} из {{total}}, ошибок: {{failed}}, с сохранёнными артефактами: {{skipped}}",
+
+    "hotkeys.tabs": "Alt+1 … Alt+6 переключают вкладки",
   },
   de,
   es,
