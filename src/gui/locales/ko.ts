@@ -20,6 +20,7 @@ export const ko: Record<string, string> = {
   "common.unknown": "알 수 없음",
   "common.loading": "불러오는 중…",
   "common.none": "아직 아무것도 없습니다.",
+  "common.alreadyExists": "{{name}} 이름의 항목이 이미 있습니다.",
   "common.showInFolder": "폴더에서 보기",
   "common.copyPath": "경로 복사",
   "common.invalidLines": "다음 줄을 확인하세요: {{lines}}",

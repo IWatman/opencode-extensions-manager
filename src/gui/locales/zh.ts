@@ -20,6 +20,7 @@ export const zh: Record<string, string> = {
   "common.unknown": "未知",
   "common.loading": "加载中…",
   "common.none": "这里还没有内容。",
+  "common.alreadyExists": "名为 {{name}} 的条目已存在。",
   "common.showInFolder": "在文件夹中显示",
   "common.copyPath": "复制路径",
   "common.invalidLines": "请检查这些行：{{lines}}",

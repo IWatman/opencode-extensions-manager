@@ -21,6 +21,7 @@ export const de: Record<string, string> = {
   "common.unknown": "Unbekannt",
   "common.loading": "Wird geladen…",
   "common.none": "Hier ist noch nichts.",
+  "common.alreadyExists": "Ein Eintrag mit dem Namen {{name}} existiert bereits.",
   "common.showInFolder": "Im Ordner anzeigen",
   "common.copyPath": "Pfad kopieren",
   "common.invalidLines": "Prüfe diese Zeilen: {{lines}}",
