@@ -91,6 +91,17 @@ export const ko: Record<string, string> = {
   "mcp.deleteDescription": "서버 {{name}}이(가) {{scope}} 구성에서 제거됩니다. .bak 백업은 유지됩니다.",
   "mcp.deleted": "MCP 서버 {{name}}이(가) 삭제되었습니다",
   "mcp.saved": "MCP 서버 {{name}}이(가) 저장되었습니다",
+  "mcp.fromLink": "링크에서 설치",
+  "mcp.sourceTitle": "소스에서 MCP 서버 설치",
+  "mcp.sourceLabel": "소스",
+  "mcp.sourceHint":
+    "GitHub 저장소 또는 파일, npm 패키지, JSON 구성 링크, MCP 주소 또는 로컬 파일이나 폴더입니다.",
+  "mcp.sourceInspect": "서버 찾기",
+  "mcp.sourceNone": "이 소스에서 MCP 서버를 찾지 못했습니다.",
+  "mcp.sourceFound": "찾은 MCP 서버: {{count}}개",
+  "mcp.sourceTrust":
+    "소스는 로컬에서 다운로드되어 분석됩니다. 설치하기 전에 각 서버를 검토하세요.",
+  "mcp.sourceInstalled": "MCP 서버 {{name}}이(가) 설치되었습니다",
 
   "plugins.title": "플러그인",
   "plugins.add": "플러그인 추가",

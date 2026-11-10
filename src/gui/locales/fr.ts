@@ -101,6 +101,17 @@ export const fr: Record<string, string> = {
     "Le serveur {{name}} sera supprimé de la configuration {{scope}}. Une sauvegarde .bak est conservée.",
   "mcp.deleted": "Serveur MCP {{name}} supprimé",
   "mcp.saved": "Serveur MCP {{name}} enregistré",
+  "mcp.fromLink": "Installer depuis un lien",
+  "mcp.sourceTitle": "Installer un serveur MCP depuis une source",
+  "mcp.sourceLabel": "Source",
+  "mcp.sourceHint":
+    "Un dépôt ou fichier GitHub, un paquet npm, un lien vers une configuration JSON, un point de terminaison MCP, ou un fichier ou dossier local.",
+  "mcp.sourceInspect": "Trouver les serveurs",
+  "mcp.sourceNone": "Aucun serveur MCP n’a été trouvé dans cette source.",
+  "mcp.sourceFound": "Serveurs MCP trouvés : {{count}}",
+  "mcp.sourceTrust":
+    "La source est téléchargée et analysée localement. Vérifiez chaque serveur avant de l’installer.",
+  "mcp.sourceInstalled": "Serveur MCP {{name}} installé",
 
   "plugins.title": "Plugins",
   "plugins.add": "Ajouter un plugin",

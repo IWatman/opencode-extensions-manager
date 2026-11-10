@@ -1,4 +1,6 @@
 import type { Plugin, SetupContext } from "@opencode/plugin/gui"
+import type { RepositoryProposal } from "../rpc"
+import { formatCommand } from "../commands.ts"
 
 export type GuiContext = SetupContext<Plugin.Declarations<{}>>
 
@@ -14,71 +16,7 @@ export function errorText(error: unknown) {
   return String(error)
 }
 
-export function quoteArgument(argument: string) {
-  if (argument.length > 0 && !/[\s"'\\]/.test(argument)) return argument
-  return JSON.stringify(argument)
-}
-
-export function formatCommand(arguments_: readonly string[]) {
-  return arguments_.map(quoteArgument).join(" ")
-}
-
-/** Splits a command line the way a shell would for the simple quoting a command array needs. */
-export function splitCommand(input: string): string[] {
-  const result: string[] = []
-  let current = ""
-  let quote: "'" | '"' | undefined
-  let escaped = false
-  let started = false
-
-  for (const character of input) {
-    if (escaped) {
-      // A backslash only escapes characters a shell treats specially. Keep it before ordinary
-      // characters, so Windows paths such as C:\work survive instead of becoming C:work.
-      if (character === "\\" || character === '"' || character === "'" || /\s/.test(character)) {
-        current += character
-      } else {
-        current += `\\${character}`
-      }
-      escaped = false
-      started = true
-      continue
-    }
-    if (character === "\\" && quote !== "'") {
-      escaped = true
-      continue
-    }
-    if (quote) {
-      if (character === quote) {
-        quote = undefined
-        continue
-      }
-      current += character
-      started = true
-      continue
-    }
-    if (character === '"' || character === "'") {
-      quote = character
-      started = true
-      continue
-    }
-    if (/\s/.test(character)) {
-      if (started) {
-        result.push(current)
-        current = ""
-        started = false
-      }
-      continue
-    }
-    current += character
-    started = true
-  }
-
-  if (escaped) current += "\\"
-  if (quote) throw new Error("Unterminated quote")
-  if (started) result.push(current)
-  return result
-}
+export { formatCommand, quoteArgument, splitCommand } from "../commands.ts"
 
 export function parsePairs(input: string) {
   const values: Record<string, string> = {}
@@ -126,6 +64,18 @@ export function mcpSummary(config: unknown) {
     return formatCommand(config.command.filter((item): item is string => typeof item === "string"))
   }
   if (config.type === "remote" && typeof config.url === "string") return config.url
+  return ""
+}
+
+/** One-line description of an install proposal: the plugin package, command, or endpoint. */
+export function repositorySummary(proposal: RepositoryProposal) {
+  if (proposal.kind === "plugin") return proposal.package ?? ""
+  const config = isRecord(proposal.config) ? proposal.config : undefined
+  if (!config) return ""
+  if (config.type === "remote" && typeof config.url === "string") return config.url
+  if (Array.isArray(config.command)) {
+    return formatCommand(config.command.filter((item): item is string => typeof item === "string"))
+  }
   return ""
 }
 

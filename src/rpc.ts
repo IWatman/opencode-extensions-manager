@@ -722,6 +722,15 @@ export const ManagerRpc = Rpc.define({
       ),
       output: portable(RepositoryInspection),
     },
+    inspectMcpSource: {
+      errors: operationErrors,
+      input: portable(
+        Schema.Struct({
+          source: Schema.String,
+        }),
+      ),
+      output: portable(RepositoryInspection),
+    },
     installRepository: {
       errors: operationErrors,
       input: portable(

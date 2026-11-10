@@ -91,6 +91,16 @@ export const zht: Record<string, string> = {
   "mcp.deleteDescription": "伺服器 {{name}} 將從 {{scope}} 設定中移除。會保留 .bak 備份。",
   "mcp.deleted": "MCP 伺服器 {{name}} 已刪除",
   "mcp.saved": "MCP 伺服器 {{name}} 已儲存",
+  "mcp.fromLink": "從連結安裝",
+  "mcp.sourceTitle": "從來源安裝 MCP 伺服器",
+  "mcp.sourceLabel": "來源",
+  "mcp.sourceHint":
+    "GitHub 儲存庫或檔案、npm 套件、JSON 設定連結、MCP 位址，或本機檔案或資料夾。",
+  "mcp.sourceInspect": "尋找伺服器",
+  "mcp.sourceNone": "在此來源中未找到 MCP 伺服器。",
+  "mcp.sourceFound": "找到 MCP 伺服器：{{count}}",
+  "mcp.sourceTrust": "來源會在本機下載並解析。安裝前請檢查每個伺服器。",
+  "mcp.sourceInstalled": "MCP 伺服器 {{name}} 已安裝",
 
   "plugins.title": "外掛",
   "plugins.add": "新增外掛",

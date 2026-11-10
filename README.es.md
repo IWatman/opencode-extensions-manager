@@ -13,6 +13,7 @@ Plugin GUI de escritorio para **OpenCode** que añade una página **Ajustes → 
   - Servidores remotos con URL, cabeceras y configuración OAuth.
   - Activar/desactivar sin borrar la entrada.
   - Estado en tiempo de ejecución: conectado, iniciando, desactivado, fallido, inicio de sesión necesario.
+  - **Instalar desde enlace**: encuentra servidores en un repositorio o archivo de GitHub, un paquete npm, una configuración JSON/JSONC, una página de documentación, un endpoint MCP remoto, un archivo o carpeta local, o JSON pegado.
 - **Plugins**
   - Paquetes npm.
   - Carpetas de plugins locales.
@@ -139,6 +140,7 @@ El ámbito de proyecto usa el directorio `.opencode` más cercano, igual que el 
 ### Servidores MCP
 
 - Añade servidores locales o remotos.
+- Pulsa **Instalar desde enlace** para detectar servidores en un repositorio o archivo de GitHub, un paquete npm, un enlace de configuración JSON/JSONC, una página de documentación, un endpoint MCP remoto, un archivo o carpeta local, o JSON pegado. Revisa los servidores propuestos e instala solo aquellos en los que confíes.
 - Edita nombre, tipo, comando/URL, variables de entorno, cabeceras y ajustes OAuth.
 - Activa o desactiva un servidor sin borrarlo.
 - Si un servidor remoto necesita autenticación, usa **Iniciar sesión** o ejecuta el comando copiado en una terminal.

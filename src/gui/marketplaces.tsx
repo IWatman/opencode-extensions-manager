@@ -10,7 +10,7 @@ import {
   type RepositoryProposal,
   type Scope,
 } from "../rpc"
-import { errorText, isBuiltinMarketplaceUrl, isRecord, type GuiContext } from "./helpers"
+import { errorText, isBuiltinMarketplaceUrl, repositorySummary, type GuiContext } from "./helpers"
 import { readSortPreference, sortItems, writeSortPreference, type SortKey } from "./list"
 import { SortControl, SkeletonRows } from "./ui"
 import type { SearchFocus } from "./search"
@@ -39,17 +39,6 @@ function storeAutoRefresh(enabled: boolean) {
 
 function revisionLabel(item: InstalledPlugin) {
   return item.previousVersion || (item.previousCommit ? item.previousCommit.slice(0, 8) : "")
-}
-
-function repositorySummary(proposal: RepositoryProposal) {
-  if (proposal.kind === "plugin") return proposal.package ?? ""
-  const config = isRecord(proposal.config) ? proposal.config : undefined
-  if (!config) return ""
-  if (config.type === "remote" && typeof config.url === "string") return config.url
-  if (Array.isArray(config.command)) {
-    return config.command.filter((item): item is string => typeof item === "string").join(" ")
-  }
-  return ""
 }
 
 export function MarketplacesSection(props: {
@@ -927,7 +916,7 @@ function InstallPluginDialog(props: {
   )
 }
 
-function RepositoryInstallDialog(props: {
+export function RepositoryInstallDialog(props: {
   ctx: GuiContext
   repository: RepositoryInspection
   scope: Scope

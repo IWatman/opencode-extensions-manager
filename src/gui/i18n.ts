@@ -108,6 +108,17 @@ export const catalog: Catalog = {
     "mcp.deleteDescription": "Server {{name}} will be removed from {{scope}} config. A .bak backup is kept.",
     "mcp.deleted": "MCP server {{name}} deleted",
     "mcp.saved": "MCP server {{name}} saved",
+    "mcp.fromLink": "Install from link",
+    "mcp.sourceTitle": "Install MCP server from source",
+    "mcp.sourceLabel": "Source",
+    "mcp.sourceHint":
+      "A GitHub repository or file, npm package, JSON config link, MCP endpoint, or a local file or folder.",
+    "mcp.sourceInspect": "Find servers",
+    "mcp.sourceNone": "No MCP servers were found in this source.",
+    "mcp.sourceFound": "MCP servers found: {{count}}",
+    "mcp.sourceTrust":
+      "The source is downloaded and parsed locally. Review each server before installing.",
+    "mcp.sourceInstalled": "MCP server {{name}} installed",
 
     "plugins.title": "Plugins",
     "plugins.add": "Add plugin",
@@ -598,6 +609,17 @@ export const catalog: Catalog = {
     "mcp.deleteDescription": "Сервер {{name}} будет удалён из конфигурации «{{scope}}». Резервная копия .bak сохранится.",
     "mcp.deleted": "MCP-сервер {{name}} удалён",
     "mcp.saved": "MCP-сервер {{name}} сохранён",
+    "mcp.fromLink": "Установить по ссылке",
+    "mcp.sourceTitle": "Установка MCP-сервера из источника",
+    "mcp.sourceLabel": "Источник",
+    "mcp.sourceHint":
+      "Репозиторий или файл GitHub, npm-пакет, ссылка на JSON-конфиг, адрес MCP-сервера или локальный файл или папка.",
+    "mcp.sourceInspect": "Найти серверы",
+    "mcp.sourceNone": "В этом источнике MCP-серверы не найдены.",
+    "mcp.sourceFound": "Найдено MCP-серверов: {{count}}",
+    "mcp.sourceTrust":
+      "Источник загружается и разбирается локально. Проверьте каждый сервер перед установкой.",
+    "mcp.sourceInstalled": "MCP-сервер {{name}} установлен",
 
     "plugins.title": "Плагины",
     "plugins.add": "Добавить плагин",

@@ -91,6 +91,17 @@ export const tr: Record<string, string> = {
   "mcp.deleteDescription": "{{name}} sunucusu {{scope}} yapılandırmasından kaldırılacak. Bir .bak yedeği saklanır.",
   "mcp.deleted": "MCP sunucusu {{name}} silindi",
   "mcp.saved": "MCP sunucusu {{name}} kaydedildi",
+  "mcp.fromLink": "Bağlantıdan yükle",
+  "mcp.sourceTitle": "Kaynaktan MCP sunucusu yükle",
+  "mcp.sourceLabel": "Kaynak",
+  "mcp.sourceHint":
+    "Bir GitHub deposu veya dosyası, npm paketi, JSON yapılandırma bağlantısı, MCP uç noktası ya da yerel bir dosya veya klasör.",
+  "mcp.sourceInspect": "Sunucuları bul",
+  "mcp.sourceNone": "Bu kaynakta MCP sunucusu bulunamadı.",
+  "mcp.sourceFound": "Bulunan MCP sunucuları: {{count}}",
+  "mcp.sourceTrust":
+    "Kaynak yerel olarak indirilip ayrıştırılır. Yüklemeden önce her sunucuyu inceleyin.",
+  "mcp.sourceInstalled": "MCP sunucusu {{name}} yüklendi",
 
   "plugins.title": "Eklentiler",
   "plugins.add": "Eklenti ekle",

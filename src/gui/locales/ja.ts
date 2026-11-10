@@ -92,6 +92,17 @@ export const ja: Record<string, string> = {
   "mcp.deleteDescription": "サーバー {{name}} は {{scope}} 設定から削除されます。.bak バックアップは保持されます。",
   "mcp.deleted": "MCP サーバー {{name}} を削除しました",
   "mcp.saved": "MCP サーバー {{name}} を保存しました",
+  "mcp.fromLink": "リンクからインストール",
+  "mcp.sourceTitle": "ソースから MCP サーバーをインストール",
+  "mcp.sourceLabel": "ソース",
+  "mcp.sourceHint":
+    "GitHub リポジトリまたはファイル、npm パッケージ、JSON 設定のリンク、MCP エンドポイント、またはローカルのファイルやフォルダー。",
+  "mcp.sourceInspect": "サーバーを検索",
+  "mcp.sourceNone": "このソースでは MCP サーバーが見つかりませんでした。",
+  "mcp.sourceFound": "検出した MCP サーバー: {{count}}",
+  "mcp.sourceTrust":
+    "ソースはローカルでダウンロードされ、解析されます。インストールする前に各サーバーを確認してください。",
+  "mcp.sourceInstalled": "MCP サーバー {{name}} をインストールしました",
 
   "plugins.title": "プラグイン",
   "plugins.add": "プラグインを追加",

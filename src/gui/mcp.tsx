@@ -1,5 +1,13 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
-import { ManagerRpc, type ConfigPreview, type ManagerState, type McpEntry, type Scope } from "../rpc"
+import {
+  ManagerRpc,
+  type ConfigPreview,
+  type ManagerState,
+  type McpEntry,
+  type RepositoryInspection,
+  type RepositoryProposal,
+  type Scope,
+} from "../rpc"
 import { DiffView } from "./diff-view"
 import {
   errorText,
@@ -15,6 +23,7 @@ import {
   mcpType,
   parsePairs,
   quoteArgument,
+  repositorySummary,
   runtimeStatus,
   sanitizeMcpConfig,
   type GuiContext,
@@ -111,6 +120,21 @@ export function McpSection(props: {
         onClose={dialog.close}
         onSaved={(next, name) => {
           props.saved(next, ctx.t("mcp.saved", { name }))
+          dialog.close()
+        }}
+      />
+    ))
+  }
+
+  const browse = () => {
+    ctx.dialogs.open((dialog) => (
+      <McpSourceDialog
+        ctx={ctx}
+        scope={props.scope}
+        project={props.project}
+        onClose={dialog.close}
+        onInstalled={(next, message) => {
+          props.saved(next, message)
           dialog.close()
         }}
       />
@@ -289,6 +313,9 @@ export function McpSection(props: {
         <div class="oem-footer">
           <ctx.ui.Button icon="plus" size="small" onClick={() => edit()}>
             {ctx.t("mcp.add")}
+          </ctx.ui.Button>
+          <ctx.ui.Button icon="download" size="small" onClick={browse}>
+            {ctx.t("mcp.fromLink")}
           </ctx.ui.Button>
           <span class="oem-hint">{ctx.t("mcp.authHint")}</span>
           <Show when={bulkResult() && selected().size === 0}>
@@ -481,6 +508,153 @@ export function McpSection(props: {
         </For>
       </Show>
     </ctx.ui.SettingsSection>
+  )
+}
+
+function McpSourceDialog(props: {
+  ctx: GuiContext
+  scope: Scope
+  project: string | undefined
+  onClose: () => void
+  onInstalled: (next: ManagerState, message: string) => void
+}) {
+  const ctx = props.ctx
+  const [source, setSource] = createSignal("")
+  const [inspecting, setInspecting] = createSignal(false)
+  const [saving, setSaving] = createSignal<string>()
+  const [error, setError] = createSignal<string>()
+  const [inspection, setInspection] = createSignal<RepositoryInspection>()
+
+  const inspect = async () => {
+    const value = source().trim()
+    if (!value || inspecting()) return
+    setInspecting(true)
+    setError(undefined)
+    setInspection(undefined)
+    try {
+      const result = await ctx.client.rpc(ManagerRpc).inspectMcpSource({ source: value })
+      setInspection(result)
+    } catch (inspectError) {
+      setError(errorText(inspectError))
+    } finally {
+      setInspecting(false)
+    }
+  }
+
+  const install = async (proposal: RepositoryProposal) => {
+    const key = `${proposal.kind}:${proposal.name ?? proposal.package ?? ""}`
+    setSaving(key)
+    setError(undefined)
+    try {
+      const next = await ctx.client.rpc(ManagerRpc).installRepository({
+        proposal,
+        scope: props.scope,
+        ...(props.project?.trim() ? { project: props.project.trim() } : {}),
+      })
+      props.onInstalled(
+        next,
+        ctx.t("mcp.sourceInstalled", { name: proposal.name ?? proposal.package ?? "" }),
+      )
+    } catch (installError) {
+      setError(errorText(installError))
+    } finally {
+      setSaving(undefined)
+    }
+  }
+
+  return (
+    <ctx.ui.Dialog
+      title={ctx.t("mcp.sourceTitle")}
+      size="large"
+      footer={
+        <ctx.ui.Button onClick={props.onClose} disabled={inspecting() || saving() !== undefined}>
+          {ctx.t("common.cancel")}
+        </ctx.ui.Button>
+      }
+    >
+      <div class="oem-form">
+        <div class="oem-field">
+          <span class="oem-field-label">{ctx.t("mcp.sourceLabel")}</span>
+          <ctx.ui.TextInput
+            value={source()}
+            onInput={setSource}
+            label={ctx.t("mcp.sourceLabel")}
+            placeholder="https://github.com/owner/repo"
+            autofocus
+          />
+          <span class="oem-hint">{ctx.t("mcp.sourceHint")}</span>
+        </div>
+
+        <div class="oem-actions">
+          <ctx.ui.Button
+            icon="download"
+            busy={inspecting()}
+            disabled={!source().trim() || saving() !== undefined}
+            onClick={() => void inspect()}
+          >
+            {ctx.t("mcp.sourceInspect")}
+          </ctx.ui.Button>
+          <span class="oem-hint">{ctx.t("mcp.sourceTrust")}</span>
+        </div>
+
+        <Show when={inspection()}>
+          {(data) => (
+            <>
+              <span class="oem-path">{data().url}</span>
+              <Show when={data().description}>
+                <span class="oem-hint">{data().description}</span>
+              </Show>
+
+              <Show
+                when={data().proposals.length > 0}
+                fallback={<div class="oem-hint">{ctx.t("mcp.sourceNone")}</div>}
+              >
+                <div class="oem-field">
+                  <span class="oem-field-label">
+                    {ctx.t("mcp.sourceFound", { count: data().proposals.length })}
+                  </span>
+                  <For each={data().proposals}>
+                    {(proposal) => {
+                      const key = `${proposal.kind}:${proposal.name ?? proposal.package ?? ""}`
+                      return (
+                        <div class="oem-field">
+                          <span class="oem-field-label">
+                            {ctx.t("marketplaces.installAsMcp", { name: proposal.name ?? "" })}
+                          </span>
+                          <Show when={proposal.reason}>
+                            <span class="oem-hint">{proposal.reason}</span>
+                          </Show>
+                          <Show when={repositorySummary(proposal)}>
+                            <code class="oem-command">{repositorySummary(proposal)}</code>
+                          </Show>
+                          <div class="oem-actions">
+                            <ctx.ui.Button
+                              icon="download"
+                              size="small"
+                              busy={saving() === key}
+                              disabled={saving() !== undefined && saving() !== key}
+                              onClick={() => void install(proposal)}
+                            >
+                              {ctx.t("marketplaces.install")}
+                            </ctx.ui.Button>
+                          </div>
+                        </div>
+                      )
+                    }}
+                  </For>
+                </div>
+              </Show>
+
+              <For each={data().notes}>{(note) => <span class="oem-hint">{note}</span>}</For>
+            </>
+          )}
+        </Show>
+
+        <Show when={error()}>
+          <div class="oem-error">{error()}</div>
+        </Show>
+      </div>
+    </ctx.ui.Dialog>
   )
 }
 
