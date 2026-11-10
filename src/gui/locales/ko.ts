@@ -163,6 +163,8 @@ export const ko: Record<string, string> = {
   "marketplaces.installAsPlugin": "플러그인 설치: {{name}}",
   "marketplaces.repositoryNone": "MCP 서버 또는 OpenCode 플러그인을 감지하지 못했습니다. 올바른 명령을 알고 있다면 opencode.json에 직접 추가하세요.",
   "marketplaces.repositoryInstalled": "{{name}}이(가) 구성에 추가되었습니다",
+  "marketplaces.repositoryDownload":
+    "npx 또는 npm으로 실행되는 MCP 서버는 설치 중에 한 번만 다운로드되므로 OpenCode의 첫 실행이 시간 초과되지 않습니다.",
 
   "claude.title": "Claude Code에서 가져오기",
   "claude.description":

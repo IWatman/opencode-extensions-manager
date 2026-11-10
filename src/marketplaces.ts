@@ -31,6 +31,7 @@ import {
   type Mutation,
   type ScopePaths,
 } from "./config.ts"
+import { prewarmPackageRunner } from "./package-runner.ts"
 import type {
   BatchUpdateResult,
   InstalledPlugin,
@@ -2396,6 +2397,11 @@ export async function installRepository(proposal: RepositoryProposal, scope: Sco
     const document = await readScope(paths)
     if (Object.hasOwn(isRecord(document.data.mcp) && isRecord(document.data.mcp.servers) ? document.data.mcp.servers : {}, proposal.name)) {
       throw new Error(`MCP server "${proposal.name}" already exists; rename it manually.`)
+    }
+    // Download package-runner servers first: OpenCode's 30 second startup limit is shorter than a
+    // cold npm install, and killing that install leaves the shared npx cache broken.
+    if (isRecord(proposal.config) && Array.isArray(proposal.config.command)) {
+      await prewarmPackageRunner(proposal.config.command)
     }
     await saveMcp(paths, { name: proposal.name, config: proposal.config })
     return

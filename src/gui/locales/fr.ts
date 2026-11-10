@@ -184,6 +184,8 @@ export const fr: Record<string, string> = {
   "marketplaces.repositoryNone":
     "Aucun serveur MCP ni plugin OpenCode détecté. Ajoutez-le manuellement à opencode.json si vous connaissez la bonne commande.",
   "marketplaces.repositoryInstalled": "{{name}} ajouté à la configuration",
+  "marketplaces.repositoryDownload":
+    "Les serveurs MCP lancés avec npx ou npm sont téléchargés une fois pendant l'installation afin que le premier lancement dans OpenCode n'expire pas.",
 
   "claude.title": "Importer depuis Claude Code",
   "claude.description":

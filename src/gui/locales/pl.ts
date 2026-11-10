@@ -163,6 +163,8 @@ export const pl: Record<string, string> = {
   "marketplaces.installAsPlugin": "Zainstaluj wtyczkę: {{name}}",
   "marketplaces.repositoryNone": "Nie wykryto serwera MCP ani wtyczki OpenCode. Jeśli znasz prawidłowe polecenie, dodaj je ręcznie do opencode.json.",
   "marketplaces.repositoryInstalled": "{{name}} został dodany do konfiguracji",
+  "marketplaces.repositoryDownload":
+    "Serwery MCP uruchamiane przez npx lub npm są pobierane raz podczas instalacji, aby pierwsze uruchomienie w OpenCode nie przekroczyło limitu czasu.",
 
   "claude.title": "Importuj z Claude Code",
   "claude.description":

@@ -163,6 +163,8 @@ export const zh: Record<string, string> = {
   "marketplaces.installAsPlugin": "安装插件：{{name}}",
   "marketplaces.repositoryNone": "未检测到 MCP 服务器或 OpenCode 插件。如果知道正确命令，请手动添加到 opencode.json。",
   "marketplaces.repositoryInstalled": "{{name}} 已添加到配置",
+  "marketplaces.repositoryDownload":
+    "通过 npx 或 npm 启动的 MCP 服务器会在安装时下载一次，以免 OpenCode 首次启动时超时。",
 
   "claude.title": "从 Claude Code 导入",
   "claude.description":

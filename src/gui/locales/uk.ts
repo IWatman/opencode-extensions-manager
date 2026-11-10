@@ -163,6 +163,8 @@ export const uk: Record<string, string> = {
   "marketplaces.installAsPlugin": "Встановити плагін: {{name}}",
   "marketplaces.repositoryNone": "MCP-сервер або плагін OpenCode не виявлено. Якщо ви знаєте правильну команду, додайте його до opencode.json вручну.",
   "marketplaces.repositoryInstalled": "{{name}} додано до конфігурації",
+  "marketplaces.repositoryDownload":
+    "MCP-сервери, що запускаються через npx або npm, завантажуються один раз під час встановлення, щоб перший запуск в OpenCode не завершився таймаутом.",
 
   "claude.title": "Імпорт із Claude Code",
   "claude.description":
