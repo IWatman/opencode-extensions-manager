@@ -13,6 +13,7 @@ Ein Desktop-GUI-Plugin für **OpenCode**, das eine Seite **Einstellungen → Erw
   - Entfernte Server mit URL, Headern und OAuth-Konfiguration.
   - Aktivieren/Deaktivieren, ohne den Eintrag zu löschen.
   - Laufzeitstatus: verbunden, startet, deaktiviert, fehlgeschlagen, Anmeldung erforderlich.
+  - **Installation per Link**: findet Server in einem GitHub-Repository oder einer Datei, einem npm-Paket, einer JSON/JSONC-Konfiguration, einer Dokumentationsseite, einem entfernten MCP-Endpunkt, einer lokalen Datei oder einem Ordner oder in eingefügtem JSON.
 - **Plugins**
   - npm-Pakete.
   - Lokale Plugin-Ordner.
@@ -138,6 +139,7 @@ Der Projektbereich verwendet den nächstgelegenen `.opencode`-Ordner, genau wie 
 ### MCP-Server
 
 - Lokale oder entfernte Server hinzufügen.
+- Auf **Per Link installieren** klicken, um Server in einem GitHub-Repository oder einer Datei, einem npm-Paket, einem JSON/JSONC-Konfigurationslink, einer Dokumentationsseite, einem entfernten MCP-Endpunkt, einer lokalen Datei oder einem Ordner oder in eingefügtem JSON zu finden. Prüfe die vorgeschlagenen Server und installiere nur die, denen du vertraust.
 - Name, Typ, Befehl/URL, Umgebungsvariablen, Header und OAuth-Einstellungen bearbeiten.
 - Server aktivieren/deaktivieren, ohne ihn zu löschen.
 - Wenn ein entfernter Server eine Authentifizierung benötigt, **Anmelden** verwenden oder den kopierten Befehl im Terminal ausführen.

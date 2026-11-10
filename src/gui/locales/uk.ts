@@ -91,6 +91,17 @@ export const uk: Record<string, string> = {
   "mcp.deleteDescription": "Сервер {{name}} буде видалено з конфігурації {{scope}}. Резервну копію .bak буде збережено.",
   "mcp.deleted": "MCP-сервер {{name}} видалено",
   "mcp.saved": "MCP-сервер {{name}} збережено",
+  "mcp.fromLink": "Встановити за посиланням",
+  "mcp.sourceTitle": "Встановлення MCP-сервера з джерела",
+  "mcp.sourceLabel": "Джерело",
+  "mcp.sourceHint":
+    "Репозиторій або файл GitHub, пакет npm, посилання на конфігурацію JSON, адреса MCP або локальний файл чи тека.",
+  "mcp.sourceInspect": "Знайти сервери",
+  "mcp.sourceNone": "У цьому джерелі MCP-серверів не знайдено.",
+  "mcp.sourceFound": "Знайдено MCP-серверів: {{count}}",
+  "mcp.sourceTrust":
+    "Джерело завантажується й аналізується локально. Перегляньте кожен сервер перед встановленням.",
+  "mcp.sourceInstalled": "MCP-сервер {{name}} встановлено",
 
   "plugins.title": "Плагіни",
   "plugins.add": "Додати плагін",

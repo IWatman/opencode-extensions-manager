@@ -91,6 +91,16 @@ export const zh: Record<string, string> = {
   "mcp.deleteDescription": "服务器 {{name}} 将从 {{scope}} 配置中移除。会保留 .bak 备份。",
   "mcp.deleted": "MCP 服务器 {{name}} 已删除",
   "mcp.saved": "MCP 服务器 {{name}} 已保存",
+  "mcp.fromLink": "从链接安装",
+  "mcp.sourceTitle": "从来源安装 MCP 服务器",
+  "mcp.sourceLabel": "来源",
+  "mcp.sourceHint":
+    "GitHub 仓库或文件、npm 包、JSON 配置链接、MCP 地址，或本地文件或文件夹。",
+  "mcp.sourceInspect": "查找服务器",
+  "mcp.sourceNone": "在此来源中未找到 MCP 服务器。",
+  "mcp.sourceFound": "找到 MCP 服务器：{{count}}",
+  "mcp.sourceTrust": "来源会在本地下载并解析。安装前请检查每个服务器。",
+  "mcp.sourceInstalled": "MCP 服务器 {{name}} 已安装",
 
   "plugins.title": "插件",
   "plugins.add": "添加插件",

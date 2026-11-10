@@ -101,6 +101,17 @@ export const es: Record<string, string> = {
     "El servidor {{name}} se eliminará de la configuración {{scope}}. Se conserva una copia .bak.",
   "mcp.deleted": "Servidor MCP {{name}} eliminado",
   "mcp.saved": "Servidor MCP {{name}} guardado",
+  "mcp.fromLink": "Instalar desde enlace",
+  "mcp.sourceTitle": "Instalar servidor MCP desde un origen",
+  "mcp.sourceLabel": "Origen",
+  "mcp.sourceHint":
+    "Un repositorio o archivo de GitHub, un paquete npm, un enlace a una configuración JSON, un endpoint MCP o un archivo o carpeta local.",
+  "mcp.sourceInspect": "Buscar servidores",
+  "mcp.sourceNone": "No se encontraron servidores MCP en este origen.",
+  "mcp.sourceFound": "Servidores MCP encontrados: {{count}}",
+  "mcp.sourceTrust":
+    "El origen se descarga y se analiza localmente. Revisa cada servidor antes de instalarlo.",
+  "mcp.sourceInstalled": "Servidor MCP {{name}} instalado",
 
   "plugins.title": "Plugins",
   "plugins.add": "Añadir plugin",

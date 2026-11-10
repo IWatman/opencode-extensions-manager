@@ -36,6 +36,7 @@ import {
   checkMarketplaceUpdates,
   getCatalog,
   inspectMarketplacePlugin,
+  inspectMcpSource,
   inspectRepository,
   installMarketplacePlugin,
   installRepository,
@@ -377,6 +378,8 @@ export default Plugin.define({
         }),
 
       inspectRepository: (input) => inspectRepository(input.url),
+
+      inspectMcpSource: (input) => inspectMcpSource(input.source),
 
       installRepository: (input) =>
         withWriteLock(async () => {

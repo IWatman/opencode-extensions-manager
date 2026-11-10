@@ -13,6 +13,7 @@ Plugin GUI de bureau pour **OpenCode** qui ajoute une page **Paramètres → Ges
   - Serveurs distants avec URL, en-têtes et configuration OAuth.
   - Activer/désactiver sans supprimer l’entrée.
   - Statut d’exécution : connecté, démarrage, désactivé, échec, connexion requise.
+  - **Installer depuis un lien** : trouve des serveurs dans un dépôt ou fichier GitHub, un paquet npm, une configuration JSON/JSONC, une page de documentation, un point de terminaison MCP distant, un fichier ou dossier local, ou du JSON collé.
 - **Plugins**
   - Paquets npm.
   - Dossiers de plugins locaux.
@@ -138,6 +139,7 @@ La portée projet utilise le dossier `.opencode` le plus proche, comme la décou
 ### Serveurs MCP
 
 - Ajoutez des serveurs locaux ou distants.
+- Cliquez sur **Installer depuis un lien** pour détecter des serveurs dans un dépôt ou fichier GitHub, un paquet npm, un lien de configuration JSON/JSONC, une page de documentation, un point de terminaison MCP distant, un fichier ou dossier local, ou du JSON collé. Examinez les serveurs proposés et n’installez que ceux auxquels vous faites confiance.
 - Modifiez le nom, le type, la commande/URL, les variables d’environnement, les en-têtes et les réglages OAuth.
 - Activez ou désactivez un serveur sans le supprimer.
 - Si un serveur distant demande une authentification, utilisez **Se connecter** ou exécutez la commande copiée dans un terminal.

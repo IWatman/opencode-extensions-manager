@@ -3,6 +3,8 @@ import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { parse as parseJsonc, type ParseError } from "jsonc-parser"
+import { splitCommand } from "./commands.ts"
 import {
   expandHome,
   globalConfigDir,
@@ -983,27 +985,43 @@ function opencodeRemoteUrl(value: string) {
   }
 }
 
+function nonEmptyStringMap(value: unknown) {
+  const map = stringMap(value)
+  return map && Object.keys(map).length > 0 ? map : undefined
+}
+
 function mapMcpServer(value: unknown): Record<string, unknown> | undefined {
   if (!isRecord(value)) return
   const type = value.type
-  if (type === "stdio" || (type === undefined && typeof value.command === "string")) {
-    if (typeof value.command !== "string") return
-    const args = Array.isArray(value.args) ? value.args.filter((item): item is string => typeof item === "string") : []
+  const args = Array.isArray(value.args)
+    ? value.args.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : []
+  const command = Array.isArray(value.command)
+    ? value.command.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : typeof value.command === "string"
+      ? [value.command, ...args]
+      : []
+  if (type === "stdio" || type === "local" || (type === undefined && command.length > 0)) {
+    if (command.length === 0) return
+    const environment = nonEmptyStringMap(value.environment) ?? nonEmptyStringMap(value.env)
     return {
       type: "local",
-      command: [value.command, ...args],
-      ...(stringMap(value.env) ? { environment: stringMap(value.env) } : {}),
+      command,
+      ...(environment ? { environment } : {}),
       ...(typeof value.cwd === "string" && value.cwd ? { cwd: value.cwd } : {}),
       ...(value.disabled === true ? { disabled: true } : {}),
+      ...(isRecord(value.timeout) ? { timeout: value.timeout } : {}),
     }
   }
-  if (type === "http" || type === "sse" || (type === undefined && typeof value.url === "string")) {
+  if (type === "http" || type === "sse" || type === "remote" || (type === undefined && typeof value.url === "string")) {
     if (typeof value.url !== "string" || !value.url) return
     return {
       type: "remote",
       url: opencodeRemoteUrl(value.url),
-      ...(stringMap(value.headers) ? { headers: stringMap(value.headers) } : {}),
+      ...(nonEmptyStringMap(value.headers) ? { headers: nonEmptyStringMap(value.headers) } : {}),
+      ...(value.oauth === false || isRecord(value.oauth) ? { oauth: value.oauth } : {}),
       ...(value.disabled === true ? { disabled: true } : {}),
+      ...(isRecord(value.timeout) ? { timeout: value.timeout } : {}),
     }
   }
   return
@@ -1011,11 +1029,26 @@ function mapMcpServer(value: unknown): Record<string, unknown> | undefined {
 
 function mcpServersFrom(value: unknown): { name: string; config: Record<string, unknown> }[] {
   if (!isRecord(value)) return []
-  const servers = isRecord(value.mcpServers) ? value.mcpServers : value
-  return Object.entries(servers).flatMap(([name, config]) => {
-    const mapped = mapMcpServer(config)
-    return mapped ? [{ name, config: mapped }] : []
-  })
+  const candidates: unknown[] = []
+  if (isRecord(value.mcpServers)) candidates.push(value.mcpServers)
+  if (isRecord(value.mcp) && isRecord(value.mcp.servers)) candidates.push(value.mcp.servers)
+  if (isRecord(value.servers)) candidates.push(value.servers)
+  if (isRecord(value.mcp) && !isRecord(value.mcp.servers)) candidates.push(value.mcp)
+  if (candidates.length === 0) candidates.push(value)
+
+  const seen = new Set<string>()
+  const result: { name: string; config: Record<string, unknown> }[] = []
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue
+    for (const [name, config] of Object.entries(candidate)) {
+      if (seen.has(name)) continue
+      const mapped = mapMcpServer(config)
+      if (!mapped) continue
+      seen.add(name)
+      result.push({ name, config: mapped })
+    }
+  }
+  return result
 }
 
 function readJsonText(files: PluginFiles, file: string): unknown {
@@ -2305,31 +2338,48 @@ export async function removeMarketplace(id: string): Promise<void> {
 /* Non-marketplace GitHub repositories                                                             */
 /* ---------------------------------------------------------------------------------------------- */
 
+function parseConfigText(text: string | undefined): unknown {
+  if (!text) return undefined
+  const trimmed = text.replace(/^\uFEFF/, "").trim()
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined
+  const errors: ParseError[] = []
+  const value = parseJsonc(trimmed, errors, { allowTrailingComma: true })
+  return errors.length === 0 ? value : undefined
+}
+
+const repositoryMcpFiles = [".mcp.json", "mcp.json", "opencode.json", "opencode.jsonc"] as const
+
 export async function inspectRepository(url: string): Promise<RepositoryInspection> {
   const location = parseGithub(url)
   if (!location) throw new Error("GitHub repository URLs are supported")
   const refs = [location.ref, "main", "master"].filter(
     (ref, index, list): ref is string => typeof ref === "string" && ref.length > 0 && list.indexOf(ref) === index,
   )
+  const folder = location.subpath.replace(/^\/+|\/+$/g, "")
   let ref = refs[0] ?? "main"
   let packageJson: unknown
   let readme: string | undefined
-  let mcpFile: unknown
+  let configs: { file: string; value: unknown }[] = []
   for (const candidate of refs) {
-    const base = `https://raw.githubusercontent.com/${location.owner}/${location.repo}/${candidate}`
-    const packageResult = await fetchText(`${base}/package.json`)
-    const readmeResult = await fetchText(`${base}/README.md`)
-    const mcpResult = await fetchText(`${base}/.mcp.json`)
-    if ([packageResult, readmeResult, mcpResult].every((result) => !result.ok && result.status === 0)) {
+    const base = `https://raw.githubusercontent.com/${location.owner}/${location.repo}/${candidate}${folder ? `/${folder}` : ""}`
+    const [packageResult, readmeResult, ...configResults] = await Promise.all([
+      fetchText(`${base}/package.json`),
+      fetchText(`${base}/README.md`),
+      ...repositoryMcpFiles.map((file) => fetchText(`${base}/${file}`)),
+    ])
+    const results = [packageResult, readmeResult, ...configResults]
+    if (results.every((result) => !result.ok && result.status === 0)) {
       throw new Error(
-        `Failed to connect to GitHub: ${packageResult.error ?? readmeResult.error ?? mcpResult.error ?? "network error"}`
+        `Failed to connect to GitHub: ${results.find((result) => result.error)?.error ?? "network error"}`
       )
     }
-    if (packageResult.ok || readmeResult.ok || mcpResult.ok) {
+    if (results.some((result) => result.ok)) {
       ref = candidate
-      packageJson = packageResult.ok ? JSON.parse(packageResult.text ?? "null") : undefined
+      packageJson = packageResult.ok ? parseConfigText(packageResult.text) : undefined
       readme = readmeResult.ok ? readmeResult.text : undefined
-      mcpFile = mcpResult.ok ? JSON.parse(mcpResult.text ?? "null") : undefined
+      configs = configResults.flatMap((result, index) =>
+        result.ok ? [{ file: repositoryMcpFiles[index]!, value: parseConfigText(result.text) }] : [],
+      )
       break
     }
   }
@@ -2346,9 +2396,9 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     proposals.push({ kind: "plugin", package: target, reason })
   }
 
-  if (isRecord(mcpFile) && isRecord(mcpFile.mcpServers)) {
-    for (const server of mcpServersFrom(mcpFile.mcpServers)) {
-      addMcp(server.name, server.config, ".mcp.json found in the repository")
+  for (const entry of configs) {
+    for (const server of mcpServersFrom(entry.value)) {
+      addMcp(server.name, server.config, `${entry.file} found in the repository`)
     }
   }
 
@@ -2388,6 +2438,602 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     proposals,
     notes,
   }
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* MCP sources: GitHub links, npm packages, JSON configs, docs pages, endpoints, and local files  */
+/* ---------------------------------------------------------------------------------------------- */
+
+interface GithubBlobLocation {
+  readonly owner: string
+  readonly repo: string
+  readonly ref: string
+  readonly file: string
+  readonly canonical: string
+}
+
+function encodePath(value: string) {
+  return value
+    .split("/")
+    .filter((part) => part.length > 0)
+    .map((part) => encodeURIComponent(part))
+    .join("/")
+}
+
+function parseGithubBlob(input: string): GithubBlobLocation | undefined {
+  let value = input.trim()
+  if (value.startsWith("github.com/")) value = `https://${value}`
+  if (!/^https?:\/\/(?:www\.)?github\.com\//i.test(value)) return
+  let url: URL
+  try {
+    url = new URL(value.replace(/^http:/i, "https:"))
+  } catch {
+    return
+  }
+  const parts = url.pathname.split("/").filter(Boolean)
+  const owner = parts[0]
+  const repo = parts[1]?.replace(/\.git$/, "")
+  const mode = parts[2]
+  if (!owner || !repo || (mode !== "blob" && mode !== "raw") || !parts[3]) return
+  const ref = decodeURIComponent(parts[3])
+  const file = parts.slice(4).map(decodeURIComponent).join("/")
+  if (!ref || !file) return
+  return {
+    owner,
+    repo,
+    ref,
+    file,
+    canonical: `https://github.com/${owner}/${repo}/blob/${ref}/${file}`,
+  }
+}
+
+function githubRawUrl(blob: GithubBlobLocation) {
+  return `https://raw.githubusercontent.com/${blob.owner}/${blob.repo}/${encodePath(blob.ref)}/${encodePath(blob.file)}`
+}
+
+interface NpmSource {
+  readonly name: string
+  readonly version?: string
+  readonly url: string
+}
+
+function parseNpmSource(input: string): NpmSource | undefined {
+  const value = input.trim()
+  if (!value) return
+  if (/^https?:\/\//i.test(value)) {
+    let url: URL
+    try {
+      url = new URL(value)
+    } catch {
+      return
+    }
+    const host = url.hostname.toLowerCase()
+    const parts = url.pathname.split("/").filter(Boolean).map((part) => decodeURIComponent(part))
+    if (host === "npmjs.com" || host === "www.npmjs.com") {
+      if (parts[0] !== "package" || !parts[1]) return
+      const scoped = parts[1].startsWith("@")
+      const name = scoped ? `${parts[1]}/${parts[2] ?? ""}` : parts[1]
+      if (!name || name.endsWith("/")) return
+      const versionIndex = scoped ? 3 : 2
+      const version = parts[versionIndex] === "v" ? parts[versionIndex + 1] : undefined
+      return {
+        name,
+        ...(version ? { version } : {}),
+        url: `https://www.npmjs.com/package/${name}`,
+      }
+    }
+    if (host === "registry.npmjs.org") {
+      const name = parts[0]?.startsWith("@") ? `${parts[0]}/${parts[1] ?? ""}` : parts[0]
+      if (!name || name.endsWith("/")) return
+      return { name, url: `https://www.npmjs.com/package/${name}` }
+    }
+    return
+  }
+
+  const spec = value.replace(/^npm:/i, "")
+  const match = /^(@[^/@\s]+\/[^@\s]+|[^@/\s]+)(?:@([^\s]+))?$/.exec(spec)
+  if (!match) return
+  const name = match[1]!
+  const version = match[2]
+  if (!/^[a-zA-Z0-9@/._-]+$/.test(name)) return
+  return {
+    name,
+    ...(version ? { version } : {}),
+    url: `https://www.npmjs.com/package/${name}`,
+  }
+}
+
+function mcpServerName(value: string, fallback = "mcp-server") {
+  const name = value
+    .trim()
+    .replace(/^@/, "")
+    .replace(/[\\/\s]+/g, "-")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[-._]+|[-._]+$/g, "")
+  return name || fallback
+}
+
+function remoteMcpName(url: URL) {
+  const host = url.hostname
+    .toLowerCase()
+    .replace(/^www\./, "")
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/\./g, "-")
+    .replace(/^mcp-/, "")
+    .replace(/-mcp$/, "")
+    .replace(/^-+|-+$/g, "")
+  return mcpServerName(host, "remote-mcp")
+}
+
+function mcpInspection(input: {
+  url: string
+  owner?: string
+  repo?: string
+  name?: string
+  description?: string
+  proposals: RepositoryProposal[]
+  notes?: string[]
+}): RepositoryInspection {
+  const repo = input.repo ?? ""
+  return {
+    url: input.url,
+    owner: input.owner ?? "",
+    repo,
+    name: input.name ?? (repo || input.url),
+    ...(input.description ? { description: input.description } : {}),
+    proposals: input.proposals,
+    notes: input.notes ?? [],
+  }
+}
+
+function proposalsFromConfig(value: unknown, reason: string) {
+  const proposals: RepositoryProposal[] = []
+  const skipped: string[] = []
+  const seen = new Set<string>()
+  const servers = mcpServersFrom(value)
+  if (servers.length === 0) {
+    const single = mapMcpServer(value)
+    if (single) servers.push({ name: "mcp-server", config: single })
+  }
+  for (const server of servers) {
+    const name = mcpServerName(server.name)
+    if (seen.has(name)) continue
+    try {
+      validateMcpConfig(server.config)
+    } catch {
+      skipped.push(server.name)
+      continue
+    }
+    seen.add(name)
+    proposals.push({ kind: "mcp", name, config: server.config, reason })
+  }
+  return { proposals, skipped }
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&(?:amp|#38);/gi, "&")
+    .replace(/&(?:lt|#60);/gi, "<")
+    .replace(/&(?:gt|#62);/gi, ">")
+    .replace(/&(?:quot|#34);/gi, '"')
+    .replace(/&(?:apos|#39);/gi, "'")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+}
+
+function htmlToPlainText(value: string) {
+  return decodeHtmlEntities(
+    value
+      .replace(/<script\b[\s\S]*?<\/script>/gi, "\n")
+      .replace(/<style\b[\s\S]*?<\/style>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:p|div|li|pre|code|h[1-6]|tr)>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  )
+}
+
+function commandsFromText(value: string) {
+  const result: string[][] = []
+  const seen = new Set<string>()
+  const runner = /^(?:npx|bunx|pnpm\s+d[lx]x|yarn\s+dlx|npm\s+exec)\b/i
+  for (const line of value.split(/\r?\n/)) {
+    const candidates: string[] = []
+    for (const match of line.matchAll(/`([^`\n]+)`/g)) {
+      if (match[1]) candidates.push(match[1])
+    }
+    const direct = line
+      .trim()
+      .replace(/^[\s$>#-]+/, "")
+      .replace(/^`+|`+$/g, "")
+      .trim()
+    if (runner.test(direct)) candidates.push(direct)
+
+    for (const candidate of candidates) {
+      if (!runner.test(candidate)) continue
+      let parts: string[]
+      try {
+        parts = splitCommand(candidate)
+      } catch {
+        continue
+      }
+      if (parts.length < 2 || parts.some((part) => part.length === 0)) continue
+      const key = parts.join("\u0000")
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(parts)
+      if (result.length >= 10) return result
+    }
+  }
+  return result
+}
+
+function absoluteHttpUrl(value: string, base?: URL) {
+  const trimmed = decodeHtmlEntities(value.trim()).replace(/[.,;]+$/, "")
+  if (!trimmed) return
+  try {
+    const url = base ? new URL(trimmed, base) : new URL(trimmed)
+    if (url.protocol !== "http:" && url.protocol !== "https:") return
+    return url.toString()
+  } catch {
+    return
+  }
+}
+
+function scanMcpText(text: string, base?: URL) {
+  const plain = htmlToPlainText(text)
+  const endpoints: string[] = []
+  const packages: string[] = []
+  const jsonLinks: string[] = []
+  const endpointSeen = new Set<string>()
+  const packageSeen = new Set<string>()
+  const linkSeen = new Set<string>()
+
+  for (const match of plain.matchAll(/https?:\/\/[^\s"'<>`)\]]+\/mcp(?:\?[^\s"'<>`)\]]*)?/gi)) {
+    const url = absoluteHttpUrl(match[0], base)
+    if (!url || endpointSeen.has(url)) continue
+    endpointSeen.add(url)
+    endpoints.push(url)
+  }
+
+  for (const source of [plain, text]) {
+    for (const match of source.matchAll(
+      /https?:\/\/(?:www\.)?npmjs\.com\/package\/((?:@[^/\s"'<>]+\/)?[^/\s"'<>?#]+)/gi,
+    )) {
+      const name = decodeURIComponent(match[1] ?? "")
+      if (!name || packageSeen.has(name)) continue
+      packageSeen.add(name)
+      packages.push(name)
+    }
+  }
+
+  for (const match of plain.matchAll(/(?:https?:\/\/|\/|\.\.?\/)[^\s"'<>`)\]]+\.jsonc?(?:\?[^\s"'<>`)\]]*)?/gi)) {
+    const url = absoluteHttpUrl(match[0], base)
+    if (!url || linkSeen.has(url)) continue
+    linkSeen.add(url)
+    jsonLinks.push(url)
+  }
+  for (const match of text.matchAll(/href\s*=\s*["']([^"']+\.jsonc?)["']/gi)) {
+    const url = absoluteHttpUrl(match[1] ?? "", base)
+    if (!url || linkSeen.has(url)) continue
+    linkSeen.add(url)
+    jsonLinks.push(url)
+  }
+
+  return {
+    endpoints,
+    commands: commandsFromText(plain),
+    packages,
+    jsonLinks: jsonLinks.slice(0, 4),
+  }
+}
+
+function addScannedProposals(
+  proposals: RepositoryProposal[],
+  scanned: ReturnType<typeof scanMcpText>,
+  notes: string[],
+) {
+  for (const endpoint of scanned.endpoints) {
+    let url: URL
+    try {
+      url = new URL(endpoint)
+    } catch {
+      continue
+    }
+    const name = remoteMcpName(url)
+    if (proposals.some((proposal) => proposal.kind === "mcp" && proposal.name === name)) continue
+    proposals.push({
+      kind: "mcp",
+      name,
+      config: { type: "remote", url: endpoint },
+      reason: "MCP endpoint found in the source",
+    })
+  }
+  for (const command of scanned.commands) {
+    const name = mcpServerName(command.slice(0, 3).join("-"), "command-mcp")
+    if (proposals.some((proposal) => proposal.kind === "mcp" && proposal.name === name)) continue
+    proposals.push({
+      kind: "mcp",
+      name,
+      config: { type: "local", command },
+      reason: "Command found in the source",
+    })
+  }
+  for (const packageName of scanned.packages) {
+    const name = mcpServerName(packageName)
+    if (proposals.some((proposal) => proposal.kind === "mcp" && proposal.name === name)) continue
+    proposals.push({
+      kind: "mcp",
+      name,
+      config: { type: "local", command: ["npx", "-y", packageName] },
+      reason: `npm package ${packageName} linked from the source`,
+    })
+  }
+  if (proposals.length === 0) notes.push("No MCP servers were detected in this source.")
+}
+
+async function inspectJsonText(text: string, label: string) {
+  const value = parseConfigText(text)
+  if (value === undefined) throw new Error("The source is not valid JSON or JSONC")
+  const { proposals, skipped } = proposalsFromConfig(value, `${label} contains an MCP server`)
+  const notes: string[] = []
+  if (skipped.length > 0) {
+    notes.push(`Skipped invalid MCP server configuration: ${skipped.join(", ")}.`)
+  }
+  if (proposals.length === 0) notes.push("No MCP servers were found in this JSON.")
+  return mcpInspection({
+    url: label,
+    owner: "local",
+    repo: "mcp-config",
+    name: label,
+    proposals,
+    notes,
+  })
+}
+
+async function inspectGithubFile(blob: GithubBlobLocation) {
+  const raw = githubRawUrl(blob)
+  const result = await fetchText(raw)
+  if (!result.ok) {
+    throw new Error(`Failed to download ${blob.file}: ${result.error ?? `HTTP ${result.status}`}`)
+  }
+  const text = result.text ?? ""
+  const parsed = parseConfigText(text)
+  if (parsed !== undefined) {
+    const { proposals, skipped } = proposalsFromConfig(parsed, `${blob.file} contains an MCP server`)
+    const notes: string[] = []
+    if (skipped.length > 0) notes.push(`Skipped invalid MCP server configuration: ${skipped.join(", ")}.`)
+    if (proposals.length === 0) notes.push("No MCP servers were found in this JSON.")
+    return mcpInspection({
+      url: blob.canonical,
+      owner: blob.owner,
+      repo: blob.repo,
+      name: blob.repo,
+      proposals,
+      notes,
+    })
+  }
+  const notes: string[] = []
+  const proposals: RepositoryProposal[] = []
+  addScannedProposals(proposals, scanMcpText(text, new URL(blob.canonical)), notes)
+  return mcpInspection({
+    url: blob.canonical,
+    owner: blob.owner,
+    repo: blob.repo,
+    name: blob.repo,
+    proposals,
+    notes,
+  })
+}
+
+async function inspectNpmPackage(source: NpmSource) {
+  const spec = source.version ? `${source.name}@${source.version}` : source.name
+  const config = { type: "local", command: ["npx", "-y", spec] }
+  validateMcpConfig(config)
+  return mcpInspection({
+    url: source.url,
+    owner: "npm",
+    repo: source.name,
+    name: source.name,
+    proposals: [
+      {
+        kind: "mcp",
+        name: mcpServerName(source.name),
+        config,
+        reason: `Runs ${spec} through npx`,
+      },
+    ],
+    notes: [
+      "The package is downloaded from npm on first start; the first launch can take a while.",
+      "Review the publisher before installing. MCP servers run with your user permissions.",
+    ],
+  })
+}
+
+function inspectRemoteEndpoint(url: URL) {
+  return mcpInspection({
+    url: url.toString(),
+    owner: url.hostname,
+    repo: "mcp",
+    name: remoteMcpName(url),
+    proposals: [
+      {
+        kind: "mcp",
+        name: remoteMcpName(url),
+        config: { type: "remote", url: url.toString() },
+        reason: "Remote MCP endpoint",
+      },
+    ],
+    notes: ["If the endpoint requires authentication, use the Sign in action after installing."],
+  })
+}
+
+async function inspectUrlSource(url: URL) {
+  const result = await fetchText(url.toString())
+  if (!result.ok) {
+    throw new Error(`Failed to fetch ${url.toString()}: ${result.error ?? `HTTP ${result.status}`}`)
+  }
+  const text = result.text ?? ""
+  const parsed = parseConfigText(text)
+  if (parsed !== undefined) {
+    const { proposals, skipped } = proposalsFromConfig(parsed, "The source contains an MCP server")
+    if (proposals.length > 0) {
+      return mcpInspection({
+        url: url.toString(),
+        owner: url.hostname,
+        repo: "mcp",
+        name: url.hostname,
+        proposals,
+        notes: skipped.length > 0 ? [`Skipped invalid MCP server configuration: ${skipped.join(", ")}.`] : [],
+      })
+    }
+  }
+
+  const notes: string[] = []
+  const proposals: RepositoryProposal[] = []
+  const scanned = scanMcpText(text, url)
+  addScannedProposals(proposals, scanned, notes)
+  for (const link of scanned.jsonLinks) {
+    if (link === url.toString()) continue
+    const configResult = await fetchText(link)
+    if (!configResult.ok) continue
+    const value = parseConfigText(configResult.text)
+    if (value === undefined) continue
+    const { proposals: found, skipped } = proposalsFromConfig(value, `MCP configuration linked from the source`)
+    if (skipped.length > 0) notes.push(`Skipped invalid MCP server configuration in ${link}: ${skipped.join(", ")}.`)
+    for (const proposal of found) {
+      if (proposals.some((item) => item.kind === "mcp" && item.name === proposal.name)) continue
+      proposals.push(proposal)
+    }
+  }
+  if (proposals.length === 0) notes.push("No MCP servers were detected on this page.")
+  return mcpInspection({
+    url: url.toString(),
+    owner: url.hostname,
+    repo: "mcp",
+    name: url.hostname,
+    proposals,
+    notes,
+  })
+}
+
+function isMcpEndpoint(url: URL) {
+  const pathname = url.pathname.replace(/\/+$/, "").toLowerCase()
+  const host = url.hostname.toLowerCase()
+  return (
+    /(?:^|\/)mcp(?:\/|$)/.test(pathname) ||
+    /(?:^|\/)sse(?:\/|$)/.test(pathname) ||
+    url.searchParams.has("mcp") ||
+    host.startsWith("mcp.") ||
+    host.includes(".mcp.")
+  )
+}
+
+async function inspectLocalSource(input: string) {
+  const localPath = input.startsWith("file://") ? fileURLToPath(input) : path.resolve(expandHome(input))
+  if (await isDirectory(localPath)) {
+    const files = [
+      ...repositoryMcpFiles,
+      "claude_desktop_config.json",
+      ".cursor/mcp.json",
+      ".vscode/mcp.json",
+    ]
+    const proposals: RepositoryProposal[] = []
+    const notes: string[] = []
+    for (const file of files) {
+      const filePath = path.join(localPath, ...file.split("/"))
+      if (!(await isFile(filePath))) continue
+      const text = await readFile(filePath, "utf8")
+      const value = parseConfigText(text)
+      if (value === undefined) continue
+      const { proposals: found, skipped } = proposalsFromConfig(value, `${file} found in the folder`)
+      if (skipped.length > 0) notes.push(`Skipped invalid MCP server configuration in ${file}: ${skipped.join(", ")}.`)
+      for (const proposal of found) {
+        if (proposals.some((item) => item.kind === "mcp" && item.name === proposal.name)) continue
+        proposals.push(proposal)
+      }
+    }
+    if (proposals.length === 0) notes.push("No MCP configuration files were found in this folder.")
+    return mcpInspection({
+      url: localPath,
+      owner: "local",
+      repo: path.basename(localPath),
+      name: path.basename(localPath),
+      proposals,
+      notes,
+    })
+  }
+
+  if (!(await isFile(localPath))) throw new Error(`Path not found: ${localPath}`)
+  const text = await readFile(localPath, "utf8")
+  const value = parseConfigText(text)
+  if (value !== undefined) {
+    const { proposals, skipped } = proposalsFromConfig(value, `${path.basename(localPath)} contains an MCP server`)
+    const notes: string[] = []
+    if (skipped.length > 0) notes.push(`Skipped invalid MCP server configuration: ${skipped.join(", ")}.`)
+    if (proposals.length === 0) notes.push("No MCP servers were found in this JSON.")
+    return mcpInspection({
+      url: localPath,
+      owner: "local",
+      repo: path.basename(localPath),
+      name: path.basename(localPath),
+      proposals,
+      notes,
+    })
+  }
+  const notes: string[] = []
+  const proposals: RepositoryProposal[] = []
+  addScannedProposals(proposals, scanMcpText(text), notes)
+  return mcpInspection({
+    url: localPath,
+    owner: "local",
+    repo: path.basename(localPath),
+    name: path.basename(localPath),
+    proposals,
+    notes,
+  })
+}
+
+/**
+ * Finds MCP servers in a GitHub repository, a GitHub or raw JSON file, an npm package, a docs
+ * page, a remote endpoint, a local config file, or a pasted JSON document.
+ */
+export async function inspectMcpSource(source: string): Promise<RepositoryInspection> {
+  const value = source.trim()
+  if (!value) throw new Error("Enter a GitHub URL, npm package, JSON config, or MCP endpoint")
+
+  if (value.startsWith("{") || value.startsWith("[")) {
+    return inspectJsonText(value, "Pasted JSON")
+  }
+
+  if (isPathLike(value)) return inspectLocalSource(value)
+
+  const npm = parseNpmSource(value)
+  if (npm) return inspectNpmPackage(npm)
+
+  const blob = parseGithubBlob(value)
+  if (blob) return inspectGithubFile(blob)
+
+  if (parseGithub(value)) {
+    const inspection = await inspectRepository(value)
+    const proposals = inspection.proposals.filter((proposal) => proposal.kind === "mcp")
+    const notes = [...inspection.notes]
+    if (proposals.length === 0) notes.push("No MCP servers were detected in this repository.")
+    else notes.push("Only MCP servers are shown here; plugins are installed from the Plugins tab.")
+    return { ...inspection, proposals, notes }
+  }
+
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`Unsupported source: ${value}`)
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Unsupported source: ${value}`)
+  }
+  if (isMcpEndpoint(url)) return inspectRemoteEndpoint(url)
+  return inspectUrlSource(url)
 }
 
 export async function installRepository(proposal: RepositoryProposal, scope: Scope, project?: string) {

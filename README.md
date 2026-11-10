@@ -17,6 +17,7 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Environment and header values are masked in the list; the eye button reveals them.
   - **Copy sanitized config** replaces environment, header, and OAuth client secret values with `***`.
   - Credential-like headers in a project config are flagged with a warning; prefer the global scope.
+   - **Install from link**: find servers in a GitHub repository or file, an npm package, a JSON/JSONC config, a documentation page, a remote MCP endpoint, a local file or folder, or pasted JSON.
 - **Plugins**
   - npm packages.
   - Local plugin folders.
@@ -160,6 +161,7 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 ### MCP servers
 
 - Add local or remote servers.
+- Click **Install from link** to detect servers in a GitHub repository or file, an npm package, a JSON/JSONC config link, a documentation page, a remote MCP endpoint, a local file or folder, or pasted JSON. Review the proposed servers and install only the ones you trust.
 - Edit name, type, command/URL, environment, headers, and OAuth settings.
 - Click **Preview changes** to see the exact config diff before saving. Preview never writes the file or creates a `.bak`.
 - Toggle a server without deleting it.
