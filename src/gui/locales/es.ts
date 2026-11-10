@@ -234,8 +234,8 @@ export const es: Record<string, string> = {
   "updates.notChecked": "Ejecuta una comprobación para ver los plugins desactualizados.",
   "updates.checkFailed": "No se pudieron buscar actualizaciones",
 
-  "tabs.about": "Acerca de",
-  "about.title": "Acerca de",
+  "tabs.about": "Acerca del plugin",
+  "about.title": "Acerca del plugin",
   "about.description": "Versión, detalles de instalación y actualizaciones del propio plugin Extensions Manager.",
   "about.experimental": "experimental",
   "about.install": "Instalación",

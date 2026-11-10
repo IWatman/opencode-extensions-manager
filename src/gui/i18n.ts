@@ -236,8 +236,8 @@ export const catalog: Catalog = {
     "updates.notChecked": "Run a check to list outdated plugins.",
     "updates.checkFailed": "Could not check for updates",
 
-    "tabs.about": "About",
-    "about.title": "About",
+    "tabs.about": "About plugin",
+    "about.title": "About plugin",
     "about.description":
       "Version, installation details, and updates for the Extensions Manager plugin itself.",
     "about.experimental": "experimental",
@@ -591,8 +591,8 @@ export const catalog: Catalog = {
     "updates.notChecked": "Запустите проверку, чтобы увидеть устаревшие плагины.",
     "updates.checkFailed": "Не удалось проверить обновления",
 
-    "tabs.about": "О приложении",
-    "about.title": "О приложении",
+    "tabs.about": "О плагине",
+    "about.title": "О плагине",
     "about.description":
       "Версия, способ установки и обновление самого плагина Extensions Manager.",
     "about.experimental": "экспериментально",

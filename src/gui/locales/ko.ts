@@ -213,8 +213,8 @@ export const ko: Record<string, string> = {
   "updates.notChecked": "검사를 실행하면 오래된 플러그인 목록이 표시됩니다.",
   "updates.checkFailed": "업데이트를 확인하지 못했습니다",
 
-  "tabs.about": "정보",
-  "about.title": "정보",
+  "tabs.about": "플러그인 정보",
+  "about.title": "플러그인 정보",
   "about.description": "Extensions Manager 플러그인 자체의 버전, 설치 정보, 업데이트를 표시합니다.",
   "about.experimental": "실험적",
   "about.install": "설치",

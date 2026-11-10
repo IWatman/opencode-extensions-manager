@@ -11,7 +11,7 @@ import { PluginsSection } from "./plugins"
 import { SkillsSection } from "./skills"
 import { UpdatesSection } from "./updates"
 
-type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "doctor" | "about"
+type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "about"
 
 interface TabItem {
   readonly id: Tab
@@ -23,7 +23,7 @@ interface TabItem {
 
 function tabFromTarget(target?: string): Tab {
   if (!target || target === "extensions-manager" || target.startsWith("oem-scope")) return "overview"
-  if (target.startsWith("oem-doctor")) return "doctor"
+  if (target.startsWith("oem-doctor")) return "about"
   if (target.startsWith("oem-about")) return "about"
   if (target.startsWith("oem-claude")) return "plugins"
   if (target.startsWith("oem-updates")) return "overview"
@@ -142,12 +142,11 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
       ...count(marketplaces().length),
     },
     {
-      id: "doctor",
-      label: ctx.t("tabs.doctor"),
-      icon: "circle-exclamation",
+      id: "about",
+      label: ctx.t("tabs.about"),
+      icon: "info",
       ...(diagnostics().length > 0 ? { count: diagnostics().length, warning: true } : {}),
     },
-    { id: "about", label: ctx.t("tabs.about"), icon: "info" },
   ]
 
   const pickProject = async () => {
@@ -306,7 +305,7 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                   <button
                     type="button"
                     class={`oem-stat${diagnostics().length > 0 ? " oem-stat-warning" : ""}`}
-                    onClick={() => setTab("doctor")}
+                    onClick={() => setTab("about")}
                   >
                     <span class="oem-stat-value">{diagnostics().length}</span>
                     <span class="oem-stat-label">{ctx.t("diagnostics.title")}</span>
@@ -439,7 +438,9 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                 />
               </Match>
 
-              <Match when={tab() === "doctor"}>
+              <Match when={tab() === "about"}>
+                <AboutSection ctx={ctx} />
+
                 <DoctorSection
                   ctx={ctx}
                   project={project()}
@@ -453,10 +454,6 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                   refresh={refresh}
                   refreshStatuses={loadStatuses}
                 />
-              </Match>
-
-              <Match when={tab() === "about"}>
-                <AboutSection ctx={ctx} />
               </Match>
             </Switch>
           </>

@@ -213,8 +213,8 @@ export const zht: Record<string, string> = {
   "updates.notChecked": "執行檢查以列出過時的外掛。",
   "updates.checkFailed": "無法檢查更新",
 
-  "tabs.about": "關於",
-  "about.title": "關於",
+  "tabs.about": "關於外掛",
+  "about.title": "關於外掛",
   "about.description": "顯示 Extensions Manager 外掛本身的版本、安裝資訊與更新。",
   "about.experimental": "實驗性",
   "about.install": "安裝",
