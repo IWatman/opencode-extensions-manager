@@ -163,6 +163,8 @@ export const tr: Record<string, string> = {
   "marketplaces.installAsPlugin": "Eklenti yükle: {{name}}",
   "marketplaces.repositoryNone": "MCP sunucusu veya OpenCode eklentisi algılanmadı. Doğru komutu biliyorsanız opencode.json dosyasına elle ekleyin.",
   "marketplaces.repositoryInstalled": "{{name}} yapılandırmaya eklendi",
+  "marketplaces.repositoryDownload":
+    "npx veya npm ile başlatılan MCP sunucuları kurulum sırasında bir kez indirilir; böylece OpenCode'daki ilk başlatma zaman aşımına uğramaz.",
 
   "claude.title": "Claude Code'dan içe aktar",
   "claude.description":

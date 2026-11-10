@@ -163,6 +163,8 @@ export const it: Record<string, string> = {
   "marketplaces.installAsPlugin": "Installa plugin: {{name}}",
   "marketplaces.repositoryNone": "Non è stato rilevato alcun server MCP o plugin OpenCode. Aggiungilo manualmente a opencode.json se conosci il comando corretto.",
   "marketplaces.repositoryInstalled": "{{name}} aggiunto alla configurazione",
+  "marketplaces.repositoryDownload":
+    "I server MCP avviati con npx o npm vengono scaricati una volta durante l'installazione, così il primo avvio in OpenCode non va in timeout.",
 
   "claude.title": "Importa da Claude Code",
   "claude.description":

@@ -1,6 +1,6 @@
 {
   "name": "opencode-extensions-manager",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "description": "OpenCode Desktop settings page for managing MCP servers, plugins, skills, and plugin marketplaces",

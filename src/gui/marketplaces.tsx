@@ -977,6 +977,9 @@ function RepositoryInstallDialog(props: {
         <Show when={props.repository.description}>
           <span class="oem-hint">{props.repository.description}</span>
         </Show>
+        <Show when={props.repository.proposals.some((proposal) => proposal.kind === "mcp")}>
+          <span class="oem-hint">{ctx.t("marketplaces.repositoryDownload")}</span>
+        </Show>
 
         <Show when={props.repository.proposals.length > 0}>
           <div class="oem-field">

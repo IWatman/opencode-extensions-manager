@@ -186,6 +186,8 @@ export const catalog: Catalog = {
     "marketplaces.repositoryNone":
       "No MCP server or OpenCode plugin was detected. Add it to opencode.json manually if you know the right command.",
     "marketplaces.repositoryInstalled": "{{name}} added to the configuration",
+    "marketplaces.repositoryDownload":
+      "MCP servers launched with npx or npm are downloaded once during installation, so the first OpenCode launch does not time out.",
 
     "claude.title": "Import from Claude Code",
     "claude.description":
@@ -674,6 +676,8 @@ export const catalog: Catalog = {
     "marketplaces.repositoryNone":
       "MCP-сервер или плагин OpenCode не найден. Если знаете правильную команду, добавьте запись в opencode.json вручную.",
     "marketplaces.repositoryInstalled": "{{name}} добавлен в конфигурацию",
+    "marketplaces.repositoryDownload":
+      "MCP-серверы, запускаемые через npx или npm, скачиваются один раз во время установки, чтобы первый запуск в OpenCode не завершился таймаутом.",
 
     "claude.title": "Импорт из Claude Code",
     "claude.description":

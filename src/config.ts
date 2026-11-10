@@ -2,6 +2,7 @@ import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 
 import { homedir } from "node:os"
 import path from "node:path"
 import { applyEdits, modify, parse, printParseErrorCode, type ParseError } from "jsonc-parser"
+import { isPackageRunner, PACKAGE_RUNNER_STARTUP_TIMEOUT } from "./package-runner.ts"
 import type { Scope } from "./rpc"
 
 /** One edit of the JSONC document, applied in order. `undefined` removes a value. */
@@ -317,24 +318,6 @@ export function validateMcpConfig(input: unknown): Record<string, unknown> {
   }
 
   return input
-}
-
-/**
- * Package runners install on their first launch. OpenCode's default 30 second startup timeout
- * kills that install, which can leave npm's `_npx` cache half-written. A longer startup timeout
- * lets the first run finish; later runs start from the warm cache.
- */
-const PACKAGE_RUNNER_STARTUP_TIMEOUT = 180_000
-
-function isPackageRunner(command: readonly unknown[]) {
-  const executable = typeof command[0] === "string" ? command[0].split(/[\\/]/).pop() : undefined
-  if (!executable) return false
-  const name = executable.toLowerCase().replace(/\.(cmd|exe|bat)$/, "")
-  const subcommand = typeof command[1] === "string" ? command[1] : ""
-  if (name === "npx" || name === "bunx" || name === "pnpx") return true
-  if (name === "npm") return subcommand === "exec" || subcommand === "x"
-  if (name === "pnpm" || name === "yarn") return subcommand === "dlx"
-  return false
 }
 
 /** Keeps hand-written fields (protocol, pool, timeouts…) when the type stays the same. */

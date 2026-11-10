@@ -164,6 +164,8 @@ export const ja: Record<string, string> = {
   "marketplaces.installAsPlugin": "プラグインをインストール: {{name}}",
   "marketplaces.repositoryNone": "MCP サーバーも OpenCode プラグインも検出されませんでした。正しいコマンドが分かる場合は opencode.json に手動で追加してください。",
   "marketplaces.repositoryInstalled": "{{name}} を設定に追加しました",
+  "marketplaces.repositoryDownload":
+    "npx または npm で起動する MCP サーバーはインストール時に一度だけダウンロードされるため、OpenCode の初回起動がタイムアウトしません。",
 
   "claude.title": "Claude Code からインポート",
   "claude.description":
