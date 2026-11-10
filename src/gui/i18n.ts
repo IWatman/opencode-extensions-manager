@@ -236,6 +236,47 @@ export const catalog: Catalog = {
     "updates.notChecked": "Run a check to list outdated plugins.",
     "updates.checkFailed": "Could not check for updates",
 
+    "tabs.about": "About",
+    "about.title": "About",
+    "about.description":
+      "Version, installation details, and updates for the Extensions Manager plugin itself.",
+    "about.experimental": "experimental",
+    "about.install": "Installation",
+    "about.installKind.git": "Git checkout",
+    "about.installKind.package": "Package",
+    "about.installKind.directory": "Local folder",
+    "about.installKind.unknown": "Unknown",
+    "about.branch": "Branch",
+    "about.commit": "Commit",
+    "about.license": "License",
+    "about.author": "Author",
+    "about.openRepo": "Open on GitHub",
+    "about.check": "Check for updates",
+    "about.upToDate": "Up to date",
+    "about.updateAvailable": "Update available",
+    "about.update": "Update plugin",
+    "about.restartHint": "Restart OpenCode to apply the update.",
+    "about.checkFailed": "Could not check for updates",
+    "about.updateFailed": "Update failed",
+    "about.updateDone": "Update applied",
+    "about.noUpdate": "Already up to date",
+    "about.localChanges": "The checkout has local changes. Commit or stash them before updating.",
+    "about.packageHint":
+      "This install is managed as a package. OpenCode's plugin service applies updates.",
+    "about.directoryHint":
+      "This is a local folder without a Git remote. Reinstall from GitHub to enable one-click updates.",
+    "about.branchHint":
+      "Automatic updates are available only on the main branch (current: {{branch}}).",
+    "about.aheadHint":
+      "Local commits diverge from origin/main, so a fast-forward update is not possible.",
+    "about.updateConfirmTitle": "Update the Extensions Manager?",
+    "about.updateConfirmDescription":
+      "Update from {{current}} to {{latest}}? The plugin will pull from GitHub and rebuild its GUI bundle. OpenCode must be restarted afterwards.",
+    "about.updateConfirmPackage":
+      "Update this plugin through OpenCode's plugin service? OpenCode must be restarted afterwards.",
+    "about.result": "Update result",
+    "about.appVersion": "OpenCode {{version}}",
+
     "skills.title": "Skills",
     "skills.add": "Add skill",
     "skills.empty": "No skills in this scope.",
@@ -549,6 +590,48 @@ export const catalog: Catalog = {
     "updates.summary": "Обновлено: {{updated}}, с ошибкой: {{failed}}, с сохранёнными артефактами: {{skipped}}",
     "updates.notChecked": "Запустите проверку, чтобы увидеть устаревшие плагины.",
     "updates.checkFailed": "Не удалось проверить обновления",
+
+    "tabs.about": "О приложении",
+    "about.title": "О приложении",
+    "about.description":
+      "Версия, способ установки и обновление самого плагина Extensions Manager.",
+    "about.experimental": "экспериментально",
+    "about.install": "Установка",
+    "about.installKind.git": "Git-репозиторий",
+    "about.installKind.package": "Пакет",
+    "about.installKind.directory": "Локальная папка",
+    "about.installKind.unknown": "Неизвестно",
+    "about.branch": "Ветка",
+    "about.commit": "Коммит",
+    "about.license": "Лицензия",
+    "about.author": "Автор",
+    "about.openRepo": "Открыть на GitHub",
+    "about.check": "Проверить обновления",
+    "about.upToDate": "Актуально",
+    "about.updateAvailable": "Есть обновление",
+    "about.update": "Обновить плагин",
+    "about.restartHint": "Перезапустите OpenCode, чтобы применить обновление.",
+    "about.checkFailed": "Не удалось проверить обновления",
+    "about.updateFailed": "Не удалось обновить",
+    "about.updateDone": "Обновление применено",
+    "about.noUpdate": "Уже актуально",
+    "about.localChanges":
+      "В репозитории есть локальные изменения. Закоммитьте или спрячьте их перед обновлением.",
+    "about.packageHint":
+      "Плагин установлен как пакет. Обновления применяет сервис плагинов OpenCode.",
+    "about.directoryHint":
+      "Это локальная папка без Git-remote. Переустановите плагин из GitHub, чтобы включить обновление одной кнопкой.",
+    "about.branchHint":
+      "Автоматическое обновление доступно только в ветке main (сейчас: {{branch}}).",
+    "about.aheadHint":
+      "Локальные коммиты разошлись с origin/main, поэтому обновление fast-forward невозможно.",
+    "about.updateConfirmTitle": "Обновить Extensions Manager?",
+    "about.updateConfirmDescription":
+      "Обновить с {{current}} до {{latest}}? Плагин получит изменения из GitHub и пересоберёт GUI. После этого нужно перезапустить OpenCode.",
+    "about.updateConfirmPackage":
+      "Обновить плагин через сервис плагинов OpenCode? После этого нужно перезапустить OpenCode.",
+    "about.result": "Результат обновления",
+    "about.appVersion": "OpenCode {{version}}",
 
     "skills.title": "Навыки",
     "skills.add": "Добавить навык",

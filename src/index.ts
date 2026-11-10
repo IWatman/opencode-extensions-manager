@@ -55,6 +55,11 @@ import {
   previewClaudePlugins,
   scanClaudePlugins,
 } from "./claude"
+import {
+  applySelfUpdate,
+  checkSelfUpdate,
+  selfUpdateInfo,
+} from "./self-update"
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error)
@@ -341,6 +346,12 @@ export default Plugin.define({
           await installRepository(input.proposal, input.scope, input.project)
           return buildState(input.project)
         }),
+
+      selfUpdateInfo: () => selfUpdateInfo(ctx.app),
+
+      checkSelfUpdate: () => checkSelfUpdate(),
+
+      applySelfUpdate: () => applySelfUpdate(),
     })
 
     await withWriteLock(async () => {

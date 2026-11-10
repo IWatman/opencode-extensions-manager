@@ -52,6 +52,11 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Checks marketplace plugins, npm/GitHub package plugins, and Claude Code imports against their original sources.
   - Updates each item independently and reports per-item results.
   - MCP servers and skills added by hand have no source and are skipped.
+- **About and self-update**
+  - Shows the plugin version, OpenCode version, installation path, branch, and commit.
+  - A Git checkout can update itself from the official GitHub repository with a fast-forward pull, dependency install when needed, and a GUI rebuild.
+  - Package installs are updated through OpenCode's plugin service.
+  - A restart is required after updating the plugin itself.
 - **Doctor**
   - Checks invalid JSONC and parse errors, duplicate MCP names across scopes, duplicate plugin entries, invalid MCP and plugin entries, failed or sign-in-required MCP servers, missing config files, and missing or unreadable skills folders.
   - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, and remove duplicate plugin entries with confirmation.
@@ -192,6 +197,15 @@ The **Update center** on the Overview tab checks installed items against the sou
 3. Click **Update all outdated** to run a batch. Each item is updated independently; one failure does not stop the rest, and per-item results show successes, failures, and marketplace artifacts kept because they no longer match the installation fingerprint.
 
 MCP servers and skills added by hand have no update source and are left alone.
+
+### About and self-update
+
+The **About** tab shows the plugin version, OpenCode version, repository, license, installation path, branch, and current commit.
+
+- **Check for updates** compares a Git checkout with `origin/main` and also asks OpenCode's plugin service about package installs.
+- **Update plugin** fast-forwards a clean checkout on `main`, runs `npm install` when package files changed, and rebuilds the GUI bundle. Package installs are updated through OpenCode's plugin service.
+- Local changes, a different branch, a non-official remote, or a divergent history block automatic updates instead of overwriting work.
+- Restart OpenCode after the update so the server half and the GUI use the same version.
 
 ### Doctor
 

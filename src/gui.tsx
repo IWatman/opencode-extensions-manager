@@ -45,6 +45,12 @@ export default Plugin.define({
           description: ctx.t("updates.description"),
           keywords: "updates outdated marketplace batch versions commits",
         },
+        {
+          id: "oem-about",
+          title: ctx.t("about.title"),
+          description: ctx.t("about.description"),
+          keywords: "about version update github self update restart install",
+        },
       ],
       render: (input) => <ExtensionsPage ctx={ctx} target={input.target} />,
     }))
