@@ -51,6 +51,8 @@ export const uk: Record<string, string> = {
   "mcp.authHint": "Якщо сервер вимагає входу, виконайте в терміналі `opencode mcp auth <server>` і завершіть авторизацію там.",
   "mcp.login": "Увійти",
   "mcp.loginCopied": "Команду скопійовано: {{command}}",
+  "mcp.reconnect": "Перепідключити",
+  "mcp.reconnectRequested": "Перепідключаю {{name}}.",
   "mcp.dialog.new": "Новий MCP-сервер",
   "mcp.dialog.edit": "Змінити MCP-сервер",
   "mcp.name": "Назва",

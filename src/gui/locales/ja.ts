@@ -52,6 +52,8 @@ export const ja: Record<string, string> = {
   "mcp.authHint": "サーバーがサインインを求める場合は、ターミナルで `opencode mcp auth <server>` を実行し、そこで認証を完了してください。",
   "mcp.login": "サインイン",
   "mcp.loginCopied": "コマンドをコピーしました: {{command}}",
+  "mcp.reconnect": "再接続",
+  "mcp.reconnectRequested": "{{name}} に再接続しています。",
   "mcp.dialog.new": "新しい MCP サーバー",
   "mcp.dialog.edit": "MCP サーバーを編集",
   "mcp.name": "名前",

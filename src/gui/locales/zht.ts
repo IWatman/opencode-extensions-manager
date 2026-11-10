@@ -51,6 +51,8 @@ export const zht: Record<string, string> = {
   "mcp.authHint": "如果伺服器要求登入，請在終端機執行 `opencode mcp auth <server>`，並在那裡完成授權。",
   "mcp.login": "登入",
   "mcp.loginCopied": "已複製命令：{{command}}",
+  "mcp.reconnect": "重新連線",
+  "mcp.reconnectRequested": "正在重新連線 {{name}}。",
   "mcp.dialog.new": "新增 MCP 伺服器",
   "mcp.dialog.edit": "編輯 MCP 伺服器",
   "mcp.name": "名稱",

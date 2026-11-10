@@ -60,6 +60,7 @@ export function McpSection(props: {
   busy: string | undefined
   statuses: McpStatusMap
   setBusy: (key: string | undefined) => void
+  refreshStatuses: () => void
   saved: (next: ManagerState, message: string) => void
   failed: (error: unknown) => void
 }) {
@@ -127,6 +128,28 @@ export function McpSection(props: {
         enabled,
       })
       props.saved(next, ctx.t("mcp.saved", { name: entry.name }))
+    } catch (error) {
+      props.failed(error)
+    } finally {
+      props.setBusy(undefined)
+    }
+  }
+
+  const reconnect = async (entry: McpEntry) => {
+    const key = `mcp:${entry.scope}:${entry.name}`
+    props.setBusy(key)
+    try {
+      await ctx.client.mcp.connect({
+        server: entry.name,
+        ...(entry.scope === "project" && props.project?.trim()
+          ? { location: { directory: props.project.trim() } }
+          : {}),
+      })
+      ctx.toast.show({
+        title: ctx.t("mcp.reconnectRequested", { name: entry.name }),
+        variant: "default",
+      })
+      window.setTimeout(() => props.refreshStatuses(), 800)
     } catch (error) {
       props.failed(error)
     } finally {
@@ -392,6 +415,16 @@ export function McpSection(props: {
                 }
               >
                 <div class="oem-actions">
+                  <Show when={runtime().status === "failed"}>
+                    <ctx.ui.Button
+                      icon="refresh"
+                      size="small"
+                      disabled={props.busy === key() || bulkBusy()}
+                      onClick={() => void reconnect(entry)}
+                    >
+                      {ctx.t("mcp.reconnect")}
+                    </ctx.ui.Button>
+                  </Show>
                   <Show when={runtime().status === "needs_auth"}>
                     <ctx.ui.Button
                       icon="lock"

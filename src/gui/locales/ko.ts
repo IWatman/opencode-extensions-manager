@@ -51,6 +51,8 @@ export const ko: Record<string, string> = {
   "mcp.authHint": "서버에서 로그인을 요구하면 터미널에서 `opencode mcp auth <server>`를 실행하고 그곳에서 인증을 완료하세요.",
   "mcp.login": "로그인",
   "mcp.loginCopied": "명령이 복사되었습니다: {{command}}",
+  "mcp.reconnect": "다시 연결",
+  "mcp.reconnectRequested": "{{name}}에 다시 연결하는 중입니다.",
   "mcp.dialog.new": "새 MCP 서버",
   "mcp.dialog.edit": "MCP 서버 편집",
   "mcp.name": "이름",

@@ -119,3 +119,65 @@ test("saveMcp accepts and persists the boundary callback ports", async (t) => {
   )
   assert.deepEqual(ports, { low: 1, high: 65535 })
 })
+
+test("validateMcpConfig accepts positive timeout values and rejects invalid ones", () => {
+  assert.doesNotThrow(() =>
+    validateMcpConfig({
+      type: "local",
+      command: ["node", "server.js"],
+      timeout: { startup: 45_000, catalog: 30_000, execution: 600_000 },
+    }),
+  )
+  for (const value of [0, -1, 1.5, Number.NaN, "1000", null]) {
+    assert.throws(
+      () =>
+        validateMcpConfig({
+          type: "local",
+          command: ["node", "server.js"],
+          timeout: { startup: value },
+        }),
+      /timeout\.startup must be a positive integer/,
+      `expected ${String(value)} to be rejected`,
+    )
+  }
+  assert.throws(
+    () => validateMcpConfig({ type: "local", command: ["node"], timeout: true }),
+    /timeout must be an object/,
+  )
+})
+
+test("saveMcp gives package-runner commands a longer startup timeout", async (t) => {
+  const scope = await tempScope(t, `{\n  "mcp": { "servers": {} }\n}\n`)
+
+  for (const [name, command] of [
+    ["npx", ["npx", "-y", "example-mcp"]],
+    ["npm", ["npm", "exec", "--yes", "example-mcp"]],
+    ["bunx", ["C:\\Program Files\\nodejs\\bunx.cmd", "example-mcp"]],
+  ] as const) {
+    await saveMcp(scope.paths, { name, config: { type: "local", command: [...command] } })
+  }
+
+  const document = await readScope(scope.paths)
+  const servers = Object.fromEntries(listMcp(document.data).map((entry) => [entry.name, entry.config]))
+  for (const name of ["npx", "npm", "bunx"]) {
+    assert.deepEqual((servers[name] as { timeout?: unknown }).timeout, { startup: 180_000 }, name)
+  }
+})
+
+test("saveMcp keeps an explicit timeout and leaves plain commands alone", async (t) => {
+  const scope = await tempScope(t, `{\n  "mcp": { "servers": {} }\n}\n`)
+
+  await saveMcp(scope.paths, {
+    name: "custom",
+    config: { type: "local", command: ["npx", "-y", "example-mcp"], timeout: { startup: 60_000 } },
+  })
+  await saveMcp(scope.paths, {
+    name: "plain",
+    config: { type: "local", command: ["node", "server.js"] },
+  })
+
+  const document = await readScope(scope.paths)
+  const servers = Object.fromEntries(listMcp(document.data).map((entry) => [entry.name, entry.config]))
+  assert.deepEqual((servers.custom as { timeout?: unknown }).timeout, { startup: 60_000 })
+  assert.equal(Object.hasOwn(servers.plain as object, "timeout"), false)
+})
