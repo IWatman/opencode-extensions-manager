@@ -1,12 +1,14 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import {
   ManagerRpc,
+  type ConfigBackup,
   type ManagerState,
   type McpEntry,
   type PluginEntry,
   type Scope,
   type ScopeInfo,
 } from "../rpc"
+import { DiffView } from "./diff-view"
 import {
   errorText,
   formatJson,
@@ -19,6 +21,23 @@ import {
 import type { McpStatusMap } from "./mcp"
 
 type Severity = "error" | "warning" | "info"
+
+function backupDate(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+function backupSize(size: number) {
+  if (size < 1024) return `${size} B`
+  const units = ["KB", "MB", "GB"]
+  let value = size / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`
+}
 
 interface FolderIssue {
   readonly scope: Scope
@@ -63,13 +82,24 @@ export function DoctorSection(props: {
 }) {
   const ctx = props.ctx
   const [folderIssues, setFolderIssues] = createSignal<FolderIssue[]>([])
+  const [backups, setBackups] = createSignal<ConfigBackup[]>([])
+  const [backupsLoading, setBackupsLoading] = createSignal(false)
+  const [backupError, setBackupError] = createSignal<string>()
+  const [backupBusy, setBackupBusy] = createSignal<string>()
+  const [fixing, setFixing] = createSignal<string>()
+  const [reporting, setReporting] = createSignal(false)
   let folderGeneration = 0
+  let backupGeneration = 0
 
   const scopeInfo = (scope: Scope): ScopeInfo | undefined =>
     scope === "global" ? props.state.global : props.state.project
 
   const scopeLabel = (scope: Scope) => ctx.t(scope === "global" ? "scope.global" : "scope.project")
-  const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
+  const activeProject = () => props.project?.trim() || props.state.project?.root
+  const target = () => {
+    const project = activeProject()
+    return project ? { project } : {}
+  }
 
   const severityBadge = (severity: Severity) => (
     <span class={`oem-badge oem-doctor-${severity}`}>{ctx.t(`doctor.severity.${severity}`)}</span>
@@ -219,14 +249,152 @@ export function DoctorSection(props: {
     setFolderIssues(found)
   }
 
+  const loadBackups = async () => {
+    const generation = ++backupGeneration
+    setBackupsLoading(true)
+    setBackupError(undefined)
+    try {
+      const project = props.state.project ? activeProject() : undefined
+      const [globalResult, projectResult] = await Promise.all([
+        ctx.client.rpc(ManagerRpc).configBackups({ scope: "global" }),
+        project
+          ? ctx.client.rpc(ManagerRpc).configBackups({ scope: "project", project })
+          : Promise.resolve({ backups: [] as ConfigBackup[] }),
+      ])
+      if (generation !== backupGeneration) return
+      const unique = new Map<string, ConfigBackup>()
+      for (const backup of [...globalResult.backups, ...projectResult.backups]) unique.set(backup.path, backup)
+      setBackups(
+        [...unique.values()].sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt)),
+      )
+    } catch (error) {
+      if (generation === backupGeneration) setBackupError(errorText(error))
+    } finally {
+      if (generation === backupGeneration) setBackupsLoading(false)
+    }
+  }
+
   createEffect(() => {
     const state = props.state
     void checkFolders(state)
   })
 
+  createEffect(() => {
+    props.state
+    props.project
+    void loadBackups()
+  })
+
   onCleanup(() => {
     folderGeneration++
+    backupGeneration++
   })
+
+  const backupTarget = (backup: ConfigBackup) => {
+    const project = backup.scope === "project" ? activeProject() : undefined
+    return project ? { project } : {}
+  }
+
+  const showBackupDiff = async (backup: ConfigBackup) => {
+    const key = `doctor:diff:${backup.path}`
+    setBackupBusy(key)
+    setBackupError(undefined)
+    try {
+      const diff = await ctx.client.rpc(ManagerRpc).configBackupDiff({
+        scope: backup.scope,
+        ...backupTarget(backup),
+        path: backup.path,
+      })
+      ctx.dialogs.open((dialog) => (
+        <ctx.ui.Dialog
+          title={ctx.t("doctor.backupDiffTitle")}
+          description={ctx.t("doctor.backupDiffHint", { date: backupDate(backup.modifiedAt) })}
+          size="x-large"
+          footer={
+            <ctx.ui.Button onClick={dialog.close}>{ctx.t("common.close")}</ctx.ui.Button>
+          }
+        >
+          <div class="oem-diff-block">
+            <span class="oem-path">{diff.path}</span>
+            <span class="oem-hint">{backup.path}</span>
+            <DiffView ctx={ctx} before={diff.before} after={diff.after} />
+          </div>
+        </ctx.ui.Dialog>
+      ))
+    } catch (error) {
+      setBackupError(errorText(error))
+      props.failed(error)
+    } finally {
+      setBackupBusy(undefined)
+    }
+  }
+
+  const restoreBackup = async (backup: ConfigBackup) => {
+    const confirmed = await ctx.dialogs.confirm({
+      title: ctx.t("doctor.backupRestoreTitle"),
+      description: ctx.t("doctor.backupRestoreDescription", {
+        path: backup.target,
+        date: backupDate(backup.modifiedAt),
+      }),
+      confirm: ctx.t("doctor.backupRestore"),
+      danger: true,
+    })
+    if (!confirmed) return
+
+    const key = `doctor:restore:${backup.path}`
+    setBackupBusy(key)
+    setBackupError(undefined)
+    try {
+      const next = await ctx.client.rpc(ManagerRpc).restoreConfigBackup({
+        scope: backup.scope,
+        ...backupTarget(backup),
+        path: backup.path,
+      })
+      props.saved(next, ctx.t("doctor.backupRestored", { path: backup.target }))
+      await loadBackups()
+    } catch (error) {
+      setBackupError(errorText(error))
+      props.failed(error)
+    } finally {
+      setBackupBusy(undefined)
+    }
+  }
+
+  const ensureFolders = async (scope: Scope) => {
+    const key = `doctor:ensure:${scope}`
+    setFixing(key)
+    try {
+      const next = await ctx.client.rpc(ManagerRpc).ensureScope({ scope, ...target() })
+      props.saved(next, ctx.t("doctor.ensured", { scope: scopeLabel(scope) }))
+      await loadBackups()
+    } catch (error) {
+      props.failed(error)
+    } finally {
+      setFixing(undefined)
+    }
+  }
+
+  const exportReport = async () => {
+    setReporting(true)
+    try {
+      const result = await ctx.client.rpc(ManagerRpc).exportDoctorReport({
+        scope: "global",
+        ...target(),
+        state: props.state,
+      })
+      reveal(result.path)
+      ctx.toast.show({
+        title: ctx.t("doctor.reportExported"),
+        description: result.path,
+        variant: "success",
+        icon: "circle-check",
+      })
+    } catch (error) {
+      props.failed(error)
+    } finally {
+      setReporting(false)
+    }
+  }
 
   const removeDuplicate = async (entry: PluginEntry) => {
     const confirmed = await ctx.dialogs.confirm({
@@ -294,12 +462,21 @@ export function DoctorSection(props: {
   }
 
   return (
+    <>
     <ctx.ui.SettingsSection
       title={ctx.t("doctor.title")}
       footer={
         <div class="oem-footer">
           <ctx.ui.Button icon="refresh" size="small" busy={props.loading} onClick={() => void props.refresh()}>
             {ctx.t("doctor.refresh")}
+          </ctx.ui.Button>
+          <ctx.ui.Button
+            icon="download"
+            size="small"
+            busy={reporting()}
+            onClick={() => void exportReport()}
+          >
+            {ctx.t("doctor.exportReport")}
           </ctx.ui.Button>
           <span class="oem-hint">{ctx.t("doctor.footer")}</span>
         </div>
@@ -597,12 +774,24 @@ export function DoctorSection(props: {
                 missing ? ctx.t("doctor.missingSkillsHint") : ctx.t("doctor.unreadableSkillsHint"),
               )}
             >
-              <ctx.ui.IconButton
-                icon="folder"
-                size="small"
-                label={ctx.t("doctor.revealSkills")}
-                onClick={() => reveal(item.path)}
-              />
+              <div class="oem-actions">
+                <Show when={missing}>
+                  <ctx.ui.Button
+                    icon="folder-add-left"
+                    size="small"
+                    busy={fixing() === `doctor:ensure:${item.scope}`}
+                    onClick={() => void ensureFolders(item.scope)}
+                  >
+                    {ctx.t("doctor.ensureScope")}
+                  </ctx.ui.Button>
+                </Show>
+                <ctx.ui.IconButton
+                  icon="folder"
+                  size="small"
+                  label={ctx.t("doctor.revealSkills")}
+                  onClick={() => reveal(item.path)}
+                />
+              </div>
             </ctx.ui.SettingsRow>
           )
         }}
@@ -620,15 +809,134 @@ export function DoctorSection(props: {
             }
             description={details("info", undefined, item.info.configPath, ctx.t("doctor.missingConfigHint"))}
           >
-            <ctx.ui.IconButton
-              icon="folder"
-              size="small"
-              label={ctx.t("doctor.revealConfigFolder")}
-              onClick={() => reveal(item.info.configDir)}
-            />
+            <div class="oem-actions">
+              <ctx.ui.Button
+                icon="folder-add-left"
+                size="small"
+                busy={fixing() === `doctor:ensure:${item.scope}`}
+                onClick={() => void ensureFolders(item.scope)}
+              >
+                {ctx.t("doctor.ensureScope")}
+              </ctx.ui.Button>
+              <ctx.ui.IconButton
+                icon="folder"
+                size="small"
+                label={ctx.t("doctor.revealConfigFolder")}
+                onClick={() => reveal(item.info.configDir)}
+              />
+            </div>
           </ctx.ui.SettingsRow>
         )}
       </For>
     </ctx.ui.SettingsSection>
+
+      <ctx.ui.SettingsSection
+        title={ctx.t("doctor.backups")}
+        footer={
+          <div class="oem-footer">
+            <ctx.ui.Button
+              icon="refresh"
+              size="small"
+              busy={backupsLoading()}
+              onClick={() => void loadBackups()}
+            >
+              {ctx.t("doctor.refreshBackups")}
+            </ctx.ui.Button>
+            <span class="oem-hint">{ctx.t("doctor.backupsHint")}</span>
+          </div>
+        }
+      >
+        <ctx.ui.SettingsRow
+          id="oem-doctor-backups"
+          title={ctx.t("doctor.backups")}
+          description={<span class="oem-hint">{ctx.t("doctor.backupSafetyHint")}</span>}
+        />
+
+        <Show when={backupError()}>
+          <ctx.ui.SettingsRow
+            title={
+              <span class="oem-title">
+                {severityBadge("error")}
+                <span>{ctx.t("doctor.backupError")}</span>
+              </span>
+            }
+            description={<span class="oem-error">{backupError()}</span>}
+          />
+        </Show>
+
+        <Show
+          when={backups().length > 0}
+          fallback={
+            <ctx.ui.SettingsRow
+              title={
+                <span class="oem-muted">
+                  {backupsLoading() ? ctx.t("doctor.backupsLoading") : ctx.t("doctor.backupsEmpty")}
+                </span>
+              }
+              description={<span class="oem-hint">{ctx.t("doctor.backupsEmptyHint")}</span>}
+            />
+          }
+        >
+          <For each={backups()}>
+            {(backup) => {
+              const diffKey = () => `doctor:diff:${backup.path}`
+              const restoreKey = () => `doctor:restore:${backup.path}`
+              return (
+                <ctx.ui.SettingsRow
+                  title={
+                    <span class="oem-title">
+                      <span class="oem-badge">
+                        {backup.kind === "registry"
+                          ? ctx.t("doctor.backupRegistry")
+                          : ctx.t("doctor.backupConfig")}
+                      </span>
+                      <span>{backupDate(backup.modifiedAt)}</span>
+                      {scopeBadge(backup.scope)}
+                    </span>
+                  }
+                  description={
+                    <span class="oem-description">
+                      <span class="oem-path">{backup.path}</span>
+                      <span class="oem-hint">
+                        {ctx.t("doctor.backupMeta", {
+                          size: backupSize(backup.size),
+                          path: backup.target,
+                        })}
+                      </span>
+                    </span>
+                  }
+                >
+                  <div class="oem-actions">
+                    <ctx.ui.Button
+                      icon="eye"
+                      size="small"
+                      busy={backupBusy() === diffKey()}
+                      onClick={() => void showBackupDiff(backup)}
+                    >
+                      {ctx.t("doctor.backupDiff")}
+                    </ctx.ui.Button>
+                    <ctx.ui.Button
+                      icon="arrow-undo-down"
+                      size="small"
+                      variant="danger"
+                      busy={backupBusy() === restoreKey()}
+                      onClick={() => void restoreBackup(backup)}
+                    >
+                      {ctx.t("doctor.backupRestore")}
+                    </ctx.ui.Button>
+                    <ctx.ui.IconButton
+                      icon="folder"
+                      size="small"
+                      label={ctx.t("common.showInFolder")}
+                      onClick={() => reveal(backup.path)}
+                    />
+                  </div>
+                </ctx.ui.SettingsRow>
+              )
+            }}
+          </For>
+        </Show>
+      </ctx.ui.SettingsSection>
+    </>
   )
 }

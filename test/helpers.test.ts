@@ -3,9 +3,15 @@ import assert from "node:assert/strict"
 import {
   formatCommand,
   formatPairs,
+  hasSecretHeaders,
+  isBuiltinMarketplaceUrl,
+  isSecretKey,
+  maskedMcpPairs,
   mcpDisabled,
+  mcpHasPairs,
   parsePairs,
   quoteArgument,
+  sanitizeMcpConfig,
   splitCommand,
 } from "../src/gui/helpers.ts"
 
@@ -88,4 +94,86 @@ test("mcpDisabled only treats the boolean true as disabled", () => {
   assert.equal(mcpDisabled({ type: "local", command: ["x"], disabled: false }), false)
   assert.equal(mcpDisabled({ type: "local", command: ["x"], disabled: "true" }), false)
   assert.equal(mcpDisabled(null), false)
+})
+
+test("isSecretKey recognizes credential-like environment and header names", () => {
+  for (const key of ["Authorization", "X-Api-Key", "api_key", "ACCESS_TOKEN", "client_secret", "password", "Cookie"]) {
+    assert.equal(isSecretKey(key), true, key)
+  }
+  for (const key of ["Accept", "Content-Type", "X-Test", "PORT", "DEBUG"]) {
+    assert.equal(isSecretKey(key), false, key)
+  }
+})
+
+test("mcp row values stay masked until revealed", () => {
+  const config = {
+    type: "remote",
+    url: "https://example.com/mcp",
+    environment: { PORT: "8080", ACCESS_TOKEN: "abc" },
+    headers: { Authorization: "Bearer abc", "X-Test": "yes" },
+  }
+  assert.equal(mcpHasPairs(config), true)
+  assert.equal(mcpHasPairs({ type: "remote", url: "https://example.com/mcp" }), false)
+  assert.equal(
+    maskedMcpPairs(config),
+    ["environment.PORT=***", "environment.ACCESS_TOKEN=***", "headers.Authorization=***", "headers.X-Test=***"].join(
+      "\n",
+    ),
+  )
+  assert.equal(
+    maskedMcpPairs(config, true),
+    ["environment.PORT=8080", "environment.ACCESS_TOKEN=abc", "headers.Authorization=Bearer abc", "headers.X-Test=yes"].join(
+      "\n",
+    ),
+  )
+})
+
+test("sanitizeMcpConfig replaces environment, header, and OAuth secrets without touching the input", () => {
+  const config = {
+    type: "remote",
+    url: "https://example.com/mcp",
+    environment: { PORT: "8080", ACCESS_TOKEN: "abc" },
+    headers: { Authorization: "Bearer abc", "X-Test": "yes" },
+    oauth: { client_id: "public", client_secret: "hidden" },
+    disabled: true,
+  }
+  const sanitized = sanitizeMcpConfig(config) as Record<string, unknown>
+  assert.deepEqual(sanitized.environment, { PORT: "***", ACCESS_TOKEN: "***" })
+  assert.deepEqual(sanitized.headers, { Authorization: "***", "X-Test": "***" })
+  assert.deepEqual(sanitized.oauth, { client_id: "public", client_secret: "***" })
+  assert.equal(sanitized.url, "https://example.com/mcp")
+  assert.equal(sanitized.disabled, true)
+  // The installed config must not be modified by copying it.
+  assert.deepEqual(config.environment, { PORT: "8080", ACCESS_TOKEN: "abc" })
+  assert.equal(config.headers.Authorization, "Bearer abc")
+  assert.equal(config.oauth.client_secret, "hidden")
+  assert.equal(sanitizeMcpConfig(null), null)
+})
+
+test("hasSecretHeaders only reports credential-like header names", () => {
+  assert.equal(hasSecretHeaders({ headers: { Authorization: "Bearer x" } }), true)
+  assert.equal(hasSecretHeaders({ headers: { "X-Api-Key": "x" } }), true)
+  assert.equal(hasSecretHeaders({ headers: { Accept: "application/json" } }), false)
+  assert.equal(hasSecretHeaders({ environment: { TOKEN: "x" } }), false)
+  assert.equal(hasSecretHeaders(null), false)
+})
+
+test("isBuiltinMarketplaceUrl accepts only the official Anthropic marketplace", () => {
+  for (const url of [
+    "https://github.com/anthropics/claude-plugins-official",
+    "https://github.com/anthropics/claude-plugins-official/",
+    "http://github.com/anthropics/claude-plugins-official.git",
+    "anthropics/claude-plugins-official",
+    "github:anthropics/claude-plugins-official",
+    "https://github.com/anthropics/claude-plugins-official/tree/main",
+  ]) {
+    assert.equal(isBuiltinMarketplaceUrl(url), true, url)
+  }
+  for (const url of [
+    "https://github.com/someone/other-marketplace",
+    "someone/other-marketplace",
+    "https://github.com/anthropics/claude-plugins-official-fork",
+  ]) {
+    assert.equal(isBuiltinMarketplaceUrl(url), false, url)
+  }
 })

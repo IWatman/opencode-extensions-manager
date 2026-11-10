@@ -75,6 +75,33 @@ const Diagnostic = Schema.Struct({
 })
 export type Diagnostic = typeof Diagnostic.Type
 
+const ConfigBackup = Schema.Struct({
+  /** `.bak` file to list, diff, or restore. */
+  path: Schema.String,
+  /** Live file this backup would replace. */
+  target: Schema.String,
+  modifiedAt: Schema.String,
+  size: Schema.Finite,
+  kind: Schema.Literals(["config", "registry"]),
+  scope: Scope,
+})
+export type ConfigBackup = typeof ConfigBackup.Type
+
+const ConfigPreview = Schema.Struct({
+  before: Schema.String,
+  after: Schema.String,
+  path: Schema.String,
+})
+export type ConfigPreview = typeof ConfigPreview.Type
+
+const ConfigBackupDiff = Schema.Struct({
+  before: Schema.String,
+  after: Schema.String,
+  path: Schema.String,
+  backupPath: Schema.String,
+})
+export type ConfigBackupDiff = typeof ConfigBackupDiff.Type
+
 const MarketplaceInfo = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -123,6 +150,9 @@ const InstalledPlugin = Schema.Struct({
   updatedAt: Schema.String,
   version: Schema.optionalKey(Schema.String),
   commit: Schema.optionalKey(Schema.String),
+  /** Revision installed before the latest successful update, used by rollback. */
+  previousVersion: Schema.optionalKey(Schema.String),
+  previousCommit: Schema.optionalKey(Schema.String),
   mcp: Schema.Array(Schema.String),
   skills: Schema.Array(Schema.String),
   plugins: Schema.Array(Schema.String),
@@ -231,6 +261,10 @@ export type ClaudeInstallResult = typeof ClaudeInstallResult.Type
 const SelfUpdateInstallKind = Schema.Literals(["git", "package", "directory", "unknown"])
 export type SelfUpdateInstallKind = typeof SelfUpdateInstallKind.Type
 
+/** `main` follows the branch tip, `stable` follows the highest semver tag on origin. */
+const SelfUpdateChannel = Schema.Literals(["main", "stable"])
+export type SelfUpdateChannel = typeof SelfUpdateChannel.Type
+
 const SelfUpdateInstall = Schema.Struct({
   kind: SelfUpdateInstallKind,
   path: Schema.String,
@@ -261,6 +295,13 @@ const SelfUpdateInfo = Schema.Struct({
 })
 export type SelfUpdateInfo = typeof SelfUpdateInfo.Type
 
+const SelfUpdateCommit = Schema.Struct({
+  sha: Schema.String,
+  date: Schema.String,
+  message: Schema.String,
+})
+export type SelfUpdateCommit = typeof SelfUpdateCommit.Type
+
 const SelfUpdateCheck = Schema.Struct({
   checkedAt: Schema.String,
   currentVersion: Schema.optionalKey(Schema.String),
@@ -270,6 +311,8 @@ const SelfUpdateCheck = Schema.Struct({
   currentDate: Schema.optionalKey(Schema.String),
   latestDate: Schema.optionalKey(Schema.String),
   latestMessage: Schema.optionalKey(Schema.String),
+  /** Newest commits between the checkout and the selected target, capped by the server. */
+  commits: Schema.optionalKey(Schema.Array(SelfUpdateCommit)),
   ahead: Schema.Finite,
   behind: Schema.Finite,
   updateAvailable: Schema.Boolean,
@@ -288,6 +331,21 @@ const SelfUpdateResult = Schema.Struct({
   error: Schema.optionalKey(Schema.String),
 })
 export type SelfUpdateResult = typeof SelfUpdateResult.Type
+
+const SelfUpdateHistoryEntry = Schema.Struct({
+  commit: Schema.String,
+  version: Schema.String,
+  at: Schema.String,
+  action: Schema.Literals(["update", "rollback"]),
+  previousCommit: Schema.optionalKey(Schema.String),
+  note: Schema.optionalKey(Schema.String),
+})
+export type SelfUpdateHistoryEntry = typeof SelfUpdateHistoryEntry.Type
+
+const SelfUpdateHistory = Schema.Struct({
+  entries: Schema.Array(SelfUpdateHistoryEntry),
+})
+export type SelfUpdateHistory = typeof SelfUpdateHistory.Type
 
 const MarketplaceUpdate = Schema.Struct({
   key: Schema.String,
@@ -488,6 +546,8 @@ export const ManagerRpc = Rpc.define({
       input: portable(
         Schema.Struct({
           url: Schema.String,
+          /** Optional branch, tag, or commit; empty uses the repository default branch. */
+          ref: Schema.optionalKey(Schema.String),
           project: Schema.optionalKey(Schema.String),
         }),
       ),
@@ -556,6 +616,20 @@ export const ManagerRpc = Rpc.define({
         }),
       ),
       output: portable(StateSchema),
+    },
+    rollbackMarketplacePlugin: {
+      input: portable(
+        Schema.Struct({
+          key: Schema.String,
+          project: Schema.optionalKey(Schema.String),
+        }),
+      ),
+      output: portable(
+        Schema.Struct({
+          state: StateSchema,
+          result: BatchUpdateResult,
+        }),
+      ),
     },
     checkMarketplaceUpdates: {
       input: portable(Schema.Struct({})),
@@ -635,12 +709,97 @@ export const ManagerRpc = Rpc.define({
       output: portable(SelfUpdateInfo),
     },
     checkSelfUpdate: {
-      input: portable(Schema.Struct({})),
+      input: portable(
+        Schema.Struct({
+          channel: Schema.optionalKey(SelfUpdateChannel),
+        }),
+      ),
       output: portable(SelfUpdateCheck),
     },
     applySelfUpdate: {
-      input: portable(Schema.Struct({})),
+      input: portable(
+        Schema.Struct({
+          channel: Schema.optionalKey(SelfUpdateChannel),
+        }),
+      ),
       output: portable(SelfUpdateResult),
+    },
+    selfUpdateHistory: {
+      input: portable(Schema.Struct({})),
+      output: portable(SelfUpdateHistory),
+    },
+    rollbackSelfUpdate: {
+      input: portable(
+        Schema.Struct({
+          commit: Schema.String,
+        }),
+      ),
+      output: portable(SelfUpdateResult),
+    },
+
+    /* ------------------------------------------------------------------------------------------ */
+    /* Config safety: backups, previews, scope setup, and Doctor report                           */
+    /* ------------------------------------------------------------------------------------------ */
+
+    configBackups: {
+      input: portable(Schema.Struct(TargetInput)),
+      output: portable(
+        Schema.Struct({
+          /** Config backups for the selected scope plus the marketplace registry backup. */
+          backups: Schema.Array(ConfigBackup),
+        }),
+      ),
+    },
+    configBackupDiff: {
+      input: portable(
+        Schema.Struct({
+          /** Optional: the scope can be inferred from a known backup path. */
+          scope: Schema.optionalKey(Scope),
+          project: Schema.optionalKey(Schema.String),
+          /** Exact `.bak` path returned by `configBackups`. */
+          path: Schema.String,
+        }),
+      ),
+      output: portable(ConfigBackupDiff),
+    },
+    restoreConfigBackup: {
+      input: portable(
+        Schema.Struct({
+          ...TargetInput,
+          /** Exact `.bak` path returned by `configBackups`. */
+          path: Schema.String,
+        }),
+      ),
+      output: portable(StateSchema),
+    },
+    previewMcp: {
+      input: portable(
+        Schema.Struct({
+          ...TargetInput,
+          name: Schema.String,
+          originalName: Schema.optionalKey(Schema.String),
+          config: Schema.Unknown,
+        }),
+      ),
+      output: portable(ConfigPreview),
+    },
+    ensureScope: {
+      input: portable(Schema.Struct(TargetInput)),
+      output: portable(StateSchema),
+    },
+    exportDoctorReport: {
+      input: portable(
+        Schema.Struct({
+          ...TargetInput,
+          /** The Doctor state shown in the GUI; written as a readable Markdown snapshot. */
+          state: Schema.Unknown,
+        }),
+      ),
+      output: portable(
+        Schema.Struct({
+          path: Schema.String,
+        }),
+      ),
     },
   },
   events: {},

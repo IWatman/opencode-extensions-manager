@@ -12,7 +12,11 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Local servers with command, working directory, and environment variables.
   - Remote servers with URL, headers, and OAuth configuration.
   - Enable/disable without deleting the entry.
+  - Preview the exact before/after config text before saving.
   - Runtime status: connected, starting, disabled, failed, sign-in required.
+  - Environment and header values are masked in the list; the eye button reveals them.
+  - **Copy sanitized config** replaces environment, header, and OAuth client secret values with `***`.
+  - Credential-like headers in a project config are flagged with a warning; prefer the global scope.
 - **Plugins**
   - npm packages.
   - Local plugin folders.
@@ -26,6 +30,10 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Built-in Anthropic marketplace catalog: `anthropics/claude-plugins-official`.
   - Nothing is installed automatically from it.
   - Add more marketplaces by GitHub URL, `owner/repo`, or local folder.
+  - A trust prompt explains that third-party marketplace plugins can add MCP servers, skills, and code; non-built-in entries also carry a **third-party** badge.
+  - Optional Git ref, branch, or tag pinning. URLs with `/tree/<ref>` keep working and the resolved ref is shown.
+  - Optional catalog auto-refresh every 5 minutes while the section is open; the choice is stored in the browser.
+  - Roll back an updated plugin to its previous recorded revision when the marketplace still offers it.
   - Search the catalog, install, update, enable/disable, and remove plugins.
   - Automatic compatibility extraction for Claude Code plugins:
     - MCP servers from `.mcp.json` / `mcpServers`.
@@ -39,7 +47,8 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Comments and formatting are preserved.
   - Atomic writes.
   - `.bak` backup before every change.
-  - Invalid JSONC blocks writes instead of corrupting the file.
+  - Backup history with unified diffs and confirmed restore for config files and the marketplace registry.
+  - Invalid JSONC blocks writes and restores instead of corrupting the file.
 - **Localization**
   - English, Russian, Chinese (Simplified), Chinese (Traditional), Spanish, French, German, Japanese, Korean, Italian, Polish, Turkish, and Ukrainian UI.
   - Other locales fall back to English.
@@ -51,16 +60,26 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
 - **Update center**
   - Checks marketplace plugins, npm/GitHub package plugins, and Claude Code imports against their original sources.
   - Updates each item independently and reports per-item results.
+  - Shows item and per-source progress while updating: "Updating X of Y: name".
   - MCP servers and skills added by hand have no source and are skipped.
+- **Search, bulk actions, and navigation**
+  - Global search across MCP servers, plugins, skills, marketplaces, catalog items, and installed marketplace plugins, with All/MCP/Plugins/Skills/Marketplaces filters and jump-to-row results.
+  - Multi-select with Select all, a selected counter, and bulk enable/disable/delete for MCP servers and skills; bulk delete for plugins.
+  - Bulk actions reuse the existing RPCs, run sequentially, show progress, and summarize successes and failures.
+  - Sort controls for MCP servers, plugins, skills, and installed marketplace plugins; the choice is remembered per list.
+  - Lightweight skeleton loading rows and Alt+1 … Alt+6 tab switching while the settings page is open.
 - **About plugin and self-update**
   - Shows the plugin version, OpenCode version, installation path, branch, and commit.
   - A Git checkout can update itself from the official GitHub repository with a fast-forward pull, dependency install when needed, and a GUI rebuild.
+  - Shows upcoming commits and keeps a 20-entry update/rollback history in the global config folder.
+  - Supports the `main` channel and semver `stable` tags, plus startup, daily, or manual checks with an About tab badge.
   - Package installs are updated through OpenCode's plugin service.
   - A restart is required after updating the plugin itself.
 - **Doctor**
   - Checks invalid JSONC and parse errors, duplicate MCP names across scopes, duplicate plugin entries, invalid MCP and plugin entries, failed or sign-in-required MCP servers, missing config files, and missing or unreadable skills folders.
-  - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, and remove duplicate plugin entries with confirmation.
-  - Never rewrites configuration on its own.
+  - Lists config and registry backups with date, size, diff, and confirmed restore.
+  - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, create missing folders/config, export a Markdown report, and remove duplicate plugin entries with confirmation.
+  - Never rewrites configuration on its own; restores and folder creation run only after an explicit click.
 
 ## Requirements
 
@@ -142,8 +161,12 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 
 - Add local or remote servers.
 - Edit name, type, command/URL, environment, headers, and OAuth settings.
+- Click **Preview changes** to see the exact config diff before saving. Preview never writes the file or creates a `.bak`.
 - Toggle a server without deleting it.
+- Environment and header values are hidden in each row. Use the eye button to reveal them for the current visit.
+- **Copy sanitized config** copies the server config with environment and header values replaced by `***`; the edit dialog always shows real values while you edit.
 - If a remote server needs authentication, use the **Sign in** action or run the copied command in a terminal.
+- A warning appears when a credential-like header is stored in the project config instead of the global config.
 
 ### Plugins
 
@@ -161,9 +184,14 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 
 1. Open the **Plugin marketplaces** section.
 2. The official Anthropic catalog is already listed.
-3. Click **Catalog** to browse it.
-4. Use search to find a plugin.
-5. Click **Install** and confirm the compatible parts.
+3. To add another source, enter its URL and optionally a Git **Ref** (branch, tag, or commit). Leave the field empty for the default branch. A URL with `/tree/<ref>` also works.
+4. Confirm the third-party trust prompt. It names the URL and explains that marketplace plugins can add MCP servers, skills, and code.
+5. Click **Catalog** to browse it; the resolved ref and a **third-party** badge are shown on non-built-in marketplaces.
+6. Use search to find a plugin.
+7. Click **Install** and confirm the compatible parts.
+8. Optional: enable **Auto-refresh catalog** to reload marketplaces and the open catalog every 5 minutes while the section is open.
+
+After a successful update, the installed row offers **Roll back** while the previous version or commit is recorded. Rollback reinstalls that revision, keeps the enabled state, and recalculates ownership fingerprints. If the marketplace no longer offers the old files, the action fails before changing anything.
 
 Marketplace metadata and installed records are stored in:
 
@@ -202,8 +230,11 @@ MCP servers and skills added by hand have no update source and are left alone.
 
 The **About plugin** tab shows the plugin version, OpenCode version, repository, license, installation path, branch, and current commit.
 
-- **Check for updates** compares a Git checkout with `origin/main` and also asks OpenCode's plugin service about package installs.
-- **Update plugin** fast-forwards a clean checkout on `main`, runs `npm install` when package files changed, and rebuilds the GUI bundle. Package installs are updated through OpenCode's plugin service.
+- **Channel** selects `main` (the latest commit, default) or `stable` (the highest semver release tag on origin, such as `v0.2.0` or `0.2.0`). Stable checks fetch tags from the official remote and refuse to apply when no release tag exists.
+- **Check frequency** controls automatic checks when the settings page opens: on startup, daily (at most once per 24 hours), or manual. The About tab shows a warning badge while an update is available, and **Check for updates** always works.
+- **Check for updates** compares a Git checkout with the selected target and also asks OpenCode's plugin service about package installs. **What's new** lists up to 20 commits between the checkout and that target.
+- **Update plugin** fast-forwards a clean checkout on `main` or to the selected stable tag, runs `npm install` when package files changed, and rebuilds the GUI bundle. Package installs are updated through OpenCode's plugin service.
+- **Update history** records successful updates and rollbacks in `extensions-manager-updates.json` in the global config folder (newest 20 entries). An update entry can be rolled back only on a clean official `main` checkout when the commit still exists locally and is an ancestor of `HEAD`; the checkout is reset, dependencies and the GUI are rebuilt, and failures are reported without hiding the new state.
 - Local changes, a different branch, a non-official remote, or a divergent history block automatic updates instead of overwriting work.
 - Restart OpenCode after the update so the server half and the GUI use the same version.
 
@@ -226,6 +257,10 @@ Safe actions offered by Doctor:
 - **Retry** reconnects a failed MCP server.
 - **Sign in** copies `opencode mcp auth <server>` for servers that need authentication.
 - **Remove #N** removes a duplicate plugin entry through the manager's existing RPC, after confirmation and with a `.bak` backup.
+- **Create missing folders/config** creates the config directory, skills directory, and an empty config file when absent. Existing files are not overwritten.
+- **Export report** writes a readable Markdown snapshot to the OpenCode temp folder and reveals or copies its path.
+
+The **Backups** section lists existing `.bak` files for the selected scopes and the marketplace registry. **Diff** shows a unified before/after view, and **Restore** asks for confirmation, validates the backup as JSONC, keeps the current file as `.bak`, and writes atomically.
 
 Doctor never rewrites configuration on its own. Fixes that require editing the config, such as duplicate MCP names across scopes, invalid entries, or skills folder permissions, are only reported for you to handle manually.
 
@@ -325,7 +360,8 @@ After changing GUI code, run `npm run build` and restart OpenCode Desktop. Serve
 - Claude Code commands, agents, hooks, and LSP servers are not supported by OpenCode.
 - GitHub API rate limits apply when fetching marketplace plugin trees. Trees are cached for five minutes.
 - Update checks use version metadata or resolved GitHub commit SHAs. A local marketplace that changes files without changing either is reported as current.
-- Doctor does not rewrite configuration on its own except for the explicit duplicate-plugin-entry removal action.
+- Rollback needs a recorded previous revision. GitHub installs can fetch the old commit; a local marketplace without an older version in its manifest cannot recover the files, and the rollback stops before changing anything.
+- Doctor does not rewrite configuration on its own except for the explicit duplicate-plugin-entry removal and backup-restore actions. Backup restore validates JSONC first and keeps the previous file as `.bak`.
 - Skills are scanned one level deep: `<skillsDir>/<id>/SKILL.md` and `<skillsDir>/<id>.md`.
 - The OAuth browser flow is started by the OpenCode CLI, not by the manager.
 - Marketplace installations are always manual; nothing from the default catalog is installed automatically.

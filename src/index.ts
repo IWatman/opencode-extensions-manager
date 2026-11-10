@@ -1,8 +1,10 @@
 import { Plugin } from "@opencode/plugin"
 import {
+  ensureScope as ensureScopeFolders,
   listMcp,
   listPlugins,
   listSkills,
+  previewMcp as previewMcpChange,
   readScope,
   removeMcp,
   removePlugin,
@@ -45,6 +47,7 @@ import {
   normalizeMcpUrls,
   readRegistry,
   removeMarketplace,
+  rollbackMarketplacePlugin,
   setMarketplacePluginEnabled,
   uninstallMarketplacePlugin,
   updateMarketplacePlugin,
@@ -58,8 +61,14 @@ import {
 import {
   applySelfUpdate,
   checkSelfUpdate,
+  readSelfUpdateHistory,
+  rollbackSelfUpdate,
   selfUpdateInfo,
 } from "./self-update"
+
+/* Config safety additions, kept separate from the marketplace and self-update imports. */
+import { configBackupDiff, listConfigBackups, restoreConfigBackup as restoreBackup } from "./backups"
+import { writeDoctorReport } from "./doctor-report"
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error)
@@ -238,7 +247,7 @@ export default Plugin.define({
 
       addMarketplace: (input) =>
         withWriteLock(async () => {
-          const added = await addMarketplace(input.url)
+          const added = await addMarketplace(input.url, input.ref)
           const state = await buildState(input.project)
           if (added.repository) {
             return { kind: "repository" as const, repository: added.repository, state }
@@ -282,6 +291,12 @@ export default Plugin.define({
         withWriteLock(async () => {
           await updateMarketplacePlugin(input.key)
           return buildState(input.project)
+        }),
+
+      rollbackMarketplacePlugin: (input) =>
+        withWriteLock(async () => {
+          const result = await rollbackMarketplacePlugin(input.key)
+          return { state: await buildState(input.project), result }
         }),
 
       checkMarketplaceUpdates: () => checkMarketplaceUpdates(),
@@ -349,9 +364,60 @@ export default Plugin.define({
 
       selfUpdateInfo: () => selfUpdateInfo(ctx.app),
 
-      checkSelfUpdate: () => checkSelfUpdate(),
+      checkSelfUpdate: (input) => checkSelfUpdate(undefined, undefined, input.channel ?? "main"),
 
-      applySelfUpdate: () => applySelfUpdate(),
+      applySelfUpdate: (input) => applySelfUpdate(undefined, undefined, input.channel ?? "main"),
+
+      selfUpdateHistory: async () => ({ entries: [...(await readSelfUpdateHistory())] }),
+
+      rollbackSelfUpdate: (input) => rollbackSelfUpdate(input.commit),
+
+      /* ---------------------------------------------------------------------------------------- */
+      /* Config safety: backups, previews, scope setup, and Doctor report                         */
+      /* ---------------------------------------------------------------------------------------- */
+
+      configBackups: (input) =>
+        withWriteLock(async () => ({
+          backups: await listConfigBackups(input.scope, input.project),
+        })),
+
+      configBackupDiff: (input) =>
+        withWriteLock(() => configBackupDiff(input.scope, input.project, input.path)),
+
+      restoreConfigBackup: (input) =>
+        withWriteLock(async () => {
+          await restoreBackup(input.scope, input.project, input.path)
+          return buildState(input.project)
+        }),
+
+      previewMcp: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          return previewMcpChange(paths, {
+            name: input.name,
+            ...(input.originalName === undefined ? {} : { originalName: input.originalName }),
+            config: input.config,
+          })
+        }),
+
+      ensureScope: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          await ensureScopeFolders(paths)
+          return buildState(input.project)
+        }),
+
+      exportDoctorReport: (input) =>
+        withWriteLock(async () => {
+          const paths = await scopePaths(input.scope, input.project)
+          const report = await writeDoctorReport({
+            scope: input.scope,
+            paths,
+            ...(input.project === undefined ? {} : { project: input.project }),
+            state: input.state,
+          })
+          return { path: report }
+        }),
     })
 
     await withWriteLock(async () => {

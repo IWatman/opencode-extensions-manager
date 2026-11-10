@@ -1,6 +1,18 @@
-import { createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { ManagerRpc, type ManagerState, type PluginEntry, type Scope } from "../rpc"
 import { errorText, formatJson, isRecord, type GuiContext } from "./helpers"
+import {
+  allSelected,
+  descendingByIndex,
+  pruneSelected,
+  readSortPreference,
+  selectAllSelected,
+  sortItems,
+  toggleSelected,
+  writeSortPreference,
+  type SortKey,
+} from "./list"
+import { BulkBar, SelectionBox, SortControl, type BulkProgress, type BulkResult } from "./ui"
 
 function isLocalTarget(target: string) {
   return (
@@ -10,6 +22,10 @@ function isLocalTarget(target: string) {
     /^[A-Za-z]:[\\/]/.test(target) ||
     target.startsWith("file://")
   )
+}
+
+function pluginKey(entry: PluginEntry) {
+  return `${entry.scope}:${entry.index}`
 }
 
 export function PluginsSection(props: {
@@ -26,6 +42,37 @@ export function PluginsSection(props: {
   const entries = () => props.state.plugins.filter((entry) => entry.scope === props.scope)
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
   const scopeLabel = () => (props.scope === "global" ? ctx.t("scope.global") : ctx.t("scope.project"))
+  const storage = (() => {
+    try {
+      return window.localStorage
+    } catch {
+      return undefined
+    }
+  })()
+  const [sort, setSort] = createSignal<SortKey>(
+    readSortPreference(storage, "oem.sort.plugins", ["name", "scope"], "name"),
+  )
+  const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = createSignal(false)
+  const [bulkProgress, setBulkProgress] = createSignal<BulkProgress>()
+  const [bulkResult, setBulkResult] = createSignal<BulkResult>()
+  const sortedEntries = createMemo(() =>
+    sortItems(entries(), sort(), {
+      name: (entry) => (entry.removal ? `-${entry.package}` : entry.package),
+      scope: (entry) => entry.scope,
+    }),
+  )
+  const selectionKeys = () => sortedEntries().map(pluginKey)
+
+  const changeSort = (value: SortKey) => {
+    setSort(value)
+    writeSortPreference(storage, "oem.sort.plugins", value)
+  }
+
+  createEffect(() => {
+    const available = new Set(entries().map(pluginKey))
+    setSelected((current) => pruneSelected(current, available))
+  })
 
   const edit = (entry?: PluginEntry) => {
     ctx.dialogs.open((dialog) => (
@@ -67,6 +114,67 @@ export function PluginsSection(props: {
     }
   }
 
+  const runBulkDelete = async () => {
+    const targets = descendingByIndex(
+      sortedEntries().filter((entry) => selected().has(pluginKey(entry))),
+    )
+    if (targets.length === 0) return
+    const confirmed = await ctx.dialogs.confirm({
+      title: ctx.t("bulk.deleteTitle"),
+      description: ctx.t("bulk.deleteDescription", {
+        count: targets.length,
+        scope: scopeLabel(),
+      }),
+      confirm: ctx.t("common.delete"),
+      danger: true,
+    })
+    if (!confirmed) return
+
+    setBulkBusy(true)
+    setBulkResult(undefined)
+    props.setBusy("plugin:bulk")
+    let lastState: ManagerState | undefined
+    let ok = 0
+    const failures: string[] = []
+    const succeeded: string[] = []
+
+    try {
+      for (let index = 0; index < targets.length; index++) {
+        const entry = targets[index]!
+        const name = entry.package || `#${entry.index}`
+        setBulkProgress({ current: index + 1, total: targets.length, name, mode: "delete" })
+        try {
+          const next = await ctx.client.rpc(ManagerRpc).removePlugin({
+            scope: entry.scope,
+            ...target(),
+            index: entry.index,
+          })
+          lastState = next
+          ok++
+          succeeded.push(pluginKey(entry))
+        } catch (error) {
+          failures.push(`${name}: ${errorText(error)}`)
+        }
+      }
+
+      setBulkResult({ ok, failed: failures.length, failures })
+      const summary = ctx.t("bulk.summary", { ok, failed: failures.length })
+      if (lastState) props.saved(lastState, summary)
+      else if (failures.length > 0) props.failed(new Error(`${summary}. ${failures.join("; ")}`))
+      if (succeeded.length > 0) {
+        setSelected((current) => {
+          const next = new Set(current)
+          for (const key of succeeded) next.delete(key)
+          return next
+        })
+      }
+    } finally {
+      setBulkBusy(false)
+      setBulkProgress(undefined)
+      props.setBusy(undefined)
+    }
+  }
+
   return (
     <ctx.ui.SettingsSection
       title={ctx.t("plugins.title")}
@@ -75,9 +183,61 @@ export function PluginsSection(props: {
           <ctx.ui.Button icon="plus" size="small" onClick={() => edit()}>
             {ctx.t("plugins.add")}
           </ctx.ui.Button>
+          <Show when={bulkResult() && selected().size === 0}>
+            <span class={bulkResult()!.failed > 0 ? "oem-error" : "oem-hint"}>
+              {ctx.t("bulk.summary", {
+                ok: bulkResult()!.ok,
+                failed: bulkResult()!.failed,
+              })}
+            </span>
+          </Show>
         </div>
       }
     >
+      <Show when={entries().length > 0}>
+        <div class="oem-list-header">
+          <label class="oem-check-label">
+            <SelectionBox
+              checked={allSelected(selected(), selectionKeys())}
+              label={ctx.t("bulk.selectAll")}
+              disabled={bulkBusy()}
+              onChange={(checked) =>
+                setSelected((current) => selectAllSelected(current, selectionKeys(), checked))
+              }
+            />
+            <span>{ctx.t("bulk.selectAll")}</span>
+          </label>
+          <span class="oem-hint">{ctx.t("bulk.selected", { count: selected().size })}</span>
+          <SortControl
+            ctx={ctx}
+            value={sort()}
+            options={[
+              { value: "name", label: ctx.t("sort.name") },
+              { value: "scope", label: ctx.t("sort.scope") },
+            ]}
+            onChange={changeSort}
+          />
+        </div>
+        <Show when={selected().size > 0}>
+          <BulkBar
+            ctx={ctx}
+            count={selected().size}
+            progress={bulkProgress()}
+            result={bulkResult()}
+            busy={bulkBusy()}
+          >
+            <ctx.ui.Button
+              variant="danger"
+              icon="trash"
+              size="small"
+              disabled={bulkBusy()}
+              onClick={() => void runBulkDelete()}
+            >
+              {ctx.t("bulk.delete")}
+            </ctx.ui.Button>
+          </BulkBar>
+        </Show>
+      </Show>
       <Show
         when={entries().length > 0}
         fallback={
@@ -87,7 +247,7 @@ export function PluginsSection(props: {
           />
         }
       >
-        <For each={entries()}>
+        <For each={sortedEntries()}>
           {(entry) => {
             const key = () => `plugin:${entry.scope}:${entry.index}`
             return (
@@ -95,6 +255,14 @@ export function PluginsSection(props: {
                 id={`oem-plugin-${entry.scope}-${entry.index}`}
                 title={
                   <span class="oem-title">
+                    <SelectionBox
+                      checked={selected().has(pluginKey(entry))}
+                      label={entry.package || String(entry.index)}
+                      disabled={bulkBusy()}
+                      onChange={(checked) =>
+                        setSelected((current) => toggleSelected(current, pluginKey(entry), checked))
+                      }
+                    />
                     <code>{entry.removal ? `-${entry.package}` : entry.package || ctx.t("common.unknown")}</code>
                     <Show when={entry.removal}>
                       <span class="oem-badge">{ctx.t("plugins.removal")}</span>
@@ -123,7 +291,7 @@ export function PluginsSection(props: {
                       icon="edit"
                       size="small"
                       label={ctx.t("common.edit")}
-                      disabled={props.busy === key()}
+                      disabled={props.busy === key() || bulkBusy()}
                       onClick={() => edit(entry)}
                     />
                   </Show>
@@ -131,7 +299,7 @@ export function PluginsSection(props: {
                     icon="trash"
                     size="small"
                     label={ctx.t("common.delete")}
-                    disabled={props.busy === key()}
+                    disabled={props.busy === key() || bulkBusy()}
                     onClick={() => void remove(entry)}
                   />
                 </div>
