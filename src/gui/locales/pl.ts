@@ -51,6 +51,8 @@ export const pl: Record<string, string> = {
   "mcp.authHint": "Jeśli serwer wymaga zalogowania, uruchom w terminalu `opencode mcp auth <server>` i dokończ autoryzację tam.",
   "mcp.login": "Zaloguj",
   "mcp.loginCopied": "Skopiowano polecenie: {{command}}",
+  "mcp.reconnect": "Połącz ponownie",
+  "mcp.reconnectRequested": "Ponowne łączenie z {{name}}.",
   "mcp.dialog.new": "Nowy serwer MCP",
   "mcp.dialog.edit": "Edytuj serwer MCP",
   "mcp.name": "Nazwa",

@@ -303,7 +303,38 @@ export function validateMcpConfig(input: unknown): Record<string, unknown> {
     throw new Error("disabled must be a boolean")
   }
 
+  if (input.timeout !== undefined) {
+    if (!isRecord(input.timeout)) throw new Error("timeout must be an object")
+    for (const key of ["startup", "catalog", "execution"] as const) {
+      const value = input.timeout[key]
+      if (
+        value !== undefined &&
+        (typeof value !== "number" || !Number.isInteger(value) || value <= 0)
+      ) {
+        throw new Error(`timeout.${key} must be a positive integer in milliseconds`)
+      }
+    }
+  }
+
   return input
+}
+
+/**
+ * Package runners install on their first launch. OpenCode's default 30 second startup timeout
+ * kills that install, which can leave npm's `_npx` cache half-written. A longer startup timeout
+ * lets the first run finish; later runs start from the warm cache.
+ */
+const PACKAGE_RUNNER_STARTUP_TIMEOUT = 180_000
+
+function isPackageRunner(command: readonly unknown[]) {
+  const executable = typeof command[0] === "string" ? command[0].split(/[\\/]/).pop() : undefined
+  if (!executable) return false
+  const name = executable.toLowerCase().replace(/\.(cmd|exe|bat)$/, "")
+  const subcommand = typeof command[1] === "string" ? command[1] : ""
+  if (name === "npx" || name === "bunx" || name === "pnpx") return true
+  if (name === "npm") return subcommand === "exec" || subcommand === "x"
+  if (name === "pnpm" || name === "yarn") return subcommand === "dlx"
+  return false
 }
 
 /** Keeps hand-written fields (protocol, pool, timeouts…) when the type stays the same. */
@@ -339,6 +370,14 @@ function prepareMcp(input: { name: string; originalName?: string; config: unknow
     else desired[key] = value
   }
   const config = validateMcpConfig(desired)
+  if (
+    config.type === "local" &&
+    Array.isArray(config.command) &&
+    config.timeout === undefined &&
+    isPackageRunner(config.command)
+  ) {
+    config.timeout = { startup: PACKAGE_RUNNER_STARTUP_TIMEOUT }
+  }
   return {
     name,
     ...(originalName === undefined ? {} : { originalName }),

@@ -55,6 +55,8 @@ export const fr: Record<string, string> = {
     "Si le serveur demande une connexion, exécutez `opencode mcp auth <serveur>` dans un terminal et terminez l’autorisation.",
   "mcp.login": "Se connecter",
   "mcp.loginCopied": "Commande copiée : {{command}}",
+  "mcp.reconnect": "Reconnecter",
+  "mcp.reconnectRequested": "Reconnexion de {{name}}.",
   "mcp.dialog.new": "Nouveau serveur MCP",
   "mcp.dialog.edit": "Modifier le serveur MCP",
   "mcp.name": "Nom",

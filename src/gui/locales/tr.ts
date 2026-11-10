@@ -51,6 +51,8 @@ export const tr: Record<string, string> = {
   "mcp.authHint": "Bir sunucu oturum açma isterse terminalde `opencode mcp auth <server>` komutunu çalıştırın ve yetkilendirmeyi orada tamamlayın.",
   "mcp.login": "Oturum aç",
   "mcp.loginCopied": "Komut kopyalandı: {{command}}",
+  "mcp.reconnect": "Yeniden bağlan",
+  "mcp.reconnectRequested": "{{name}} yeniden bağlanıyor.",
   "mcp.dialog.new": "Yeni MCP sunucusu",
   "mcp.dialog.edit": "MCP sunucusunu düzenle",
   "mcp.name": "Ad",

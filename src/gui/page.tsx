@@ -551,6 +551,7 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
                   busy={busy()}
                   statuses={statuses()[scope()]}
                   setBusy={setBusy}
+                  refreshStatuses={() => void loadStatuses()}
                   saved={saved}
                   failed={failed}
                 />

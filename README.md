@@ -167,6 +167,7 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 - **Copy sanitized config** copies the server config with environment and header values replaced by `***`; the edit dialog always shows real values while you edit.
 - If a remote server needs authentication, use the **Sign in** action or run the copied command in a terminal.
 - A warning appears when a credential-like header is stored in the project config instead of the global config.
+- Package-runner commands (`npx`, `npm exec`, `bunx`, `pnpm dlx`, `yarn dlx`) get a 180-second startup timeout when saved, so a slow first install is not killed by OpenCode's 30-second default. An explicit timeout is kept as-is.
 
 ### Plugins
 

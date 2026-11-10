@@ -55,6 +55,8 @@ export const es: Record<string, string> = {
     "Si el servidor pide iniciar sesión, ejecuta `opencode mcp auth <servidor>` en una terminal y completa la autorización allí.",
   "mcp.login": "Iniciar sesión",
   "mcp.loginCopied": "Comando copiado: {{command}}",
+  "mcp.reconnect": "Reconectar",
+  "mcp.reconnectRequested": "Reconectando {{name}}.",
   "mcp.dialog.new": "Nuevo servidor MCP",
   "mcp.dialog.edit": "Editar servidor MCP",
   "mcp.name": "Nombre",
