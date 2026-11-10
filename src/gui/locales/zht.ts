@@ -1,5 +1,11 @@
 export const zht: Record<string, string> = {
   "page.title": "擴充功能管理器",
+  "tabs.overview": "概覽",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "外掛",
+  "tabs.skills": "技能",
+  "tabs.marketplaces": "市集",
+  "tabs.doctor": "醫生",
   "page.description": "無需手動編輯 opencode.json，即可管理 OpenCode 的 MCP 伺服器、外掛與技能。",
   "command.group": "擴充功能",
 

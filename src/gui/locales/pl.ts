@@ -1,5 +1,11 @@
 export const pl: Record<string, string> = {
   "page.title": "Menedżer rozszerzeń",
+  "tabs.overview": "Przegląd",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "Wtyczki",
+  "tabs.skills": "Umiejętności",
+  "tabs.marketplaces": "Marketplace",
+  "tabs.doctor": "Doktor",
   "page.description": "Zarządzaj serwerami MCP, wtyczkami i umiejętnościami OpenCode bez ręcznej edycji opencode.json.",
   "command.group": "Rozszerzenia",
 

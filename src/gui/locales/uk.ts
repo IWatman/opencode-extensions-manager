@@ -1,5 +1,11 @@
 export const uk: Record<string, string> = {
   "page.title": "Менеджер розширень",
+  "tabs.overview": "Огляд",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "Плагіни",
+  "tabs.skills": "Навички",
+  "tabs.marketplaces": "Маркетплейси",
+  "tabs.doctor": "Доктор",
   "page.description": "Керуйте MCP-серверами, плагінами та навичками OpenCode без ручного редагування opencode.json.",
   "command.group": "Розширення",
 

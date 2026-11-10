@@ -17,6 +17,12 @@ export const catalog: Catalog = {
     "page.description":
       "Manage MCP servers, plugins, and skills for OpenCode without editing opencode.json by hand.",
     "command.group": "Extensions",
+    "tabs.overview": "Overview",
+    "tabs.mcp": "MCP",
+    "tabs.plugins": "Plugins",
+    "tabs.skills": "Skills",
+    "tabs.marketplaces": "Marketplaces",
+    "tabs.doctor": "Doctor",
 
     "common.refresh": "Refresh",
     "common.add": "Add",
@@ -325,6 +331,12 @@ export const catalog: Catalog = {
     "page.description":
       "Управление MCP-серверами, плагинами и навыками OpenCode без ручного редактирования opencode.json.",
     "command.group": "Расширения",
+    "tabs.overview": "Обзор",
+    "tabs.mcp": "MCP",
+    "tabs.plugins": "Плагины",
+    "tabs.skills": "Навыки",
+    "tabs.marketplaces": "Маркетплейсы",
+    "tabs.doctor": "Доктор",
 
     "common.refresh": "Обновить",
     "common.add": "Добавить",

@@ -1,5 +1,11 @@
 export const ja: Record<string, string> = {
   "page.title": "拡張機能マネージャー",
+  "tabs.overview": "概要",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "プラグイン",
+  "tabs.skills": "スキル",
+  "tabs.marketplaces": "マーケット",
+  "tabs.doctor": "ドクター",
   "page.description":
     "opencode.json を手で編集せずに、OpenCode の MCP サーバー、プラグイン、スキルを管理します。",
   "command.group": "拡張機能",

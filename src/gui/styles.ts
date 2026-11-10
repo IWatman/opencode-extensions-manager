@@ -183,4 +183,154 @@ export const styles = `
 
 .oem-textarea-small { min-height: 68px; }
 .oem-textarea-tall { min-height: 320px; }
+
+.oem-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 0 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.oem-toolbar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.oem-toolbar-label {
+  font-size: 11px;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.oem-toolbar-grow {
+  flex: 1;
+  min-width: 240px;
+}
+
+.oem-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.oem-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  margin: 0 0 16px;
+  padding: 4px 0 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  scrollbar-width: thin;
+}
+
+.oem-tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 7px 10px;
+  border-radius: 6px 6px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.oem-tab:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  opacity: 0.9;
+}
+
+.oem-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  outline-offset: -2px;
+}
+
+.oem-tab-active {
+  opacity: 1;
+  border-bottom-color: currentColor;
+  font-weight: 500;
+}
+
+.oem-tab-count {
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  opacity: 0.85;
+}
+
+.oem-tab-warning {
+  background: #e5484d;
+  color: #fff;
+  opacity: 1;
+}
+
+.oem-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.oem-stat {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.oem-stat:hover {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border-color: color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.oem-stat:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  outline-offset: 1px;
+}
+
+.oem-stat-value {
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 600;
+}
+
+.oem-stat-label {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.oem-stat-hint {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.oem-stat-warning .oem-stat-value {
+  color: #d29922;
+}
 `
