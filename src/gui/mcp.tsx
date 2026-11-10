@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { ManagerRpc, type ManagerState, type McpEntry, type Scope } from "../rpc"
 import {
   errorText,
@@ -22,9 +22,33 @@ import {
   statusClass,
   statusKey,
 } from "./helpers"
+import {
+  allSelected,
+  pruneSelected,
+  readSortPreference,
+  selectAllSelected,
+  sortItems,
+  toggleSelected,
+  writeSortPreference,
+  type SortKey,
+} from "./list"
+import { BulkBar, SelectionBox, SortControl, type BulkProgress, type BulkResult } from "./ui"
 
 export interface McpStatusMap {
   readonly [name: string]: { status: RuntimeStatus; error?: string }
+}
+
+const runtimeRank: Record<RuntimeStatus, number> = {
+  connected: 0,
+  pending: 1,
+  needs_auth: 2,
+  failed: 3,
+  disabled: 4,
+  unknown: 5,
+}
+
+function mcpKey(entry: McpEntry) {
+  return `${entry.scope}:${entry.name}`
 }
 
 export function McpSection(props: {
@@ -42,6 +66,37 @@ export function McpSection(props: {
   const entries = () => props.state.mcp.filter((entry) => entry.scope === props.scope)
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
   const scopeLabel = () => (props.scope === "global" ? ctx.t("scope.global") : ctx.t("scope.project"))
+  const storage = (() => {
+    try {
+      return window.localStorage
+    } catch {
+      return undefined
+    }
+  })()
+  const [sort, setSort] = createSignal<SortKey>(
+    readSortPreference(storage, "oem.sort.mcp", ["name", "status"], "name"),
+  )
+  const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = createSignal(false)
+  const [bulkProgress, setBulkProgress] = createSignal<BulkProgress>()
+  const [bulkResult, setBulkResult] = createSignal<BulkResult>()
+  const sortedEntries = createMemo(() =>
+    sortItems(entries(), sort(), {
+      name: (entry) => entry.name,
+      status: (entry) => runtimeRank[props.statuses[entry.name]?.status ?? "unknown"],
+    }),
+  )
+  const selectionKeys = () => sortedEntries().map(mcpKey)
+
+  const changeSort = (value: SortKey) => {
+    setSort(value)
+    writeSortPreference(storage, "oem.sort.mcp", value)
+  }
+
+  createEffect(() => {
+    const available = new Set(entries().map(mcpKey))
+    setSelected((current) => pruneSelected(current, available))
+  })
 
   const edit = (entry?: McpEntry) => {
     ctx.dialogs.open((dialog) => (
@@ -128,6 +183,79 @@ export function McpSection(props: {
     }
   }
 
+  const runBulk = async (mode: "enable" | "disable" | "delete") => {
+    const targets = sortedEntries().filter((entry) => selected().has(mcpKey(entry)))
+    if (targets.length === 0) return
+    if (mode === "delete") {
+      const confirmed = await ctx.dialogs.confirm({
+        title: ctx.t("bulk.deleteTitle"),
+        description: ctx.t("bulk.deleteDescription", {
+          count: targets.length,
+          scope: scopeLabel(),
+        }),
+        confirm: ctx.t("common.delete"),
+        danger: true,
+      })
+      if (!confirmed) return
+    }
+
+    setBulkBusy(true)
+    setBulkResult(undefined)
+    props.setBusy("mcp:bulk")
+    let lastState: ManagerState | undefined
+    let ok = 0
+    const failures: string[] = []
+    const succeeded: string[] = []
+
+    try {
+      for (let index = 0; index < targets.length; index++) {
+        const entry = targets[index]!
+        setBulkProgress({
+          current: index + 1,
+          total: targets.length,
+          name: entry.name,
+          mode: mode === "delete" ? "delete" : "toggle",
+        })
+        try {
+          const next =
+            mode === "delete"
+              ? await ctx.client.rpc(ManagerRpc).removeMcp({
+                  scope: entry.scope,
+                  ...target(),
+                  name: entry.name,
+                })
+              : await ctx.client.rpc(ManagerRpc).setMcpEnabled({
+                  scope: entry.scope,
+                  ...target(),
+                  name: entry.name,
+                  enabled: mode === "enable",
+                })
+          lastState = next
+          ok++
+          succeeded.push(mcpKey(entry))
+        } catch (error) {
+          failures.push(`${entry.name}: ${errorText(error)}`)
+        }
+      }
+
+      setBulkResult({ ok, failed: failures.length, failures })
+      const summary = ctx.t("bulk.summary", { ok, failed: failures.length })
+      if (lastState) props.saved(lastState, summary)
+      else if (failures.length > 0) props.failed(new Error(`${summary}. ${failures.join("; ")}`))
+      if (succeeded.length > 0) {
+        setSelected((current) => {
+          const next = new Set(current)
+          for (const key of succeeded) next.delete(key)
+          return next
+        })
+      }
+    } finally {
+      setBulkBusy(false)
+      setBulkProgress(undefined)
+      props.setBusy(undefined)
+    }
+  }
+
   return (
     <ctx.ui.SettingsSection
       title={ctx.t("mcp.title")}
@@ -137,9 +265,75 @@ export function McpSection(props: {
             {ctx.t("mcp.add")}
           </ctx.ui.Button>
           <span class="oem-hint">{ctx.t("mcp.authHint")}</span>
+          <Show when={bulkResult() && selected().size === 0}>
+            <span class={bulkResult()!.failed > 0 ? "oem-error" : "oem-hint"}>
+              {ctx.t("bulk.summary", {
+                ok: bulkResult()!.ok,
+                failed: bulkResult()!.failed,
+              })}
+            </span>
+          </Show>
         </div>
       }
     >
+      <Show when={entries().length > 0}>
+        <div class="oem-list-header">
+          <label class="oem-check-label">
+            <SelectionBox
+              checked={allSelected(selected(), selectionKeys())}
+              label={ctx.t("bulk.selectAll")}
+              disabled={bulkBusy()}
+              onChange={(checked) =>
+                setSelected((current) => selectAllSelected(current, selectionKeys(), checked))
+              }
+            />
+            <span>{ctx.t("bulk.selectAll")}</span>
+          </label>
+          <span class="oem-hint">{ctx.t("bulk.selected", { count: selected().size })}</span>
+          <SortControl
+            ctx={ctx}
+            value={sort()}
+            options={[
+              { value: "name", label: ctx.t("sort.name") },
+              { value: "status", label: ctx.t("sort.status") },
+            ]}
+            onChange={changeSort}
+          />
+        </div>
+        <Show when={selected().size > 0}>
+          <BulkBar
+            ctx={ctx}
+            count={selected().size}
+            progress={bulkProgress()}
+            result={bulkResult()}
+            busy={bulkBusy()}
+          >
+            <ctx.ui.Button
+              size="small"
+              disabled={bulkBusy()}
+              onClick={() => void runBulk("enable")}
+            >
+              {ctx.t("bulk.enable")}
+            </ctx.ui.Button>
+            <ctx.ui.Button
+              size="small"
+              disabled={bulkBusy()}
+              onClick={() => void runBulk("disable")}
+            >
+              {ctx.t("bulk.disable")}
+            </ctx.ui.Button>
+            <ctx.ui.Button
+              variant="danger"
+              icon="trash"
+              size="small"
+              disabled={bulkBusy()}
+              onClick={() => void runBulk("delete")}
+            >
+              {ctx.t("bulk.delete")}
+            </ctx.ui.Button>
+          </BulkBar>
+        </Show>
+      </Show>
       <Show
         when={entries().length > 0}
         fallback={
@@ -149,7 +343,7 @@ export function McpSection(props: {
           />
         }
       >
-        <For each={entries()}>
+        <For each={sortedEntries()}>
           {(entry) => {
             const runtime = () => props.statuses[entry.name] ?? { status: "unknown" as RuntimeStatus }
             const disabled = () => mcpDisabled(entry.config)
@@ -160,6 +354,14 @@ export function McpSection(props: {
                 id={`oem-mcp-${entry.scope}-${entry.name}`}
                 title={
                   <span class="oem-title">
+                    <SelectionBox
+                      checked={selected().has(mcpKey(entry))}
+                      label={entry.name}
+                      disabled={bulkBusy()}
+                      onChange={(checked) =>
+                        setSelected((current) => toggleSelected(current, mcpKey(entry), checked))
+                      }
+                    />
                     <span>{entry.name}</span>
                     <span class={`oem-badge oem-badge-${mcpType(entry.config)}`}>
                       {ctx.t(`mcp.type.${mcpType(entry.config)}`)}
@@ -192,7 +394,7 @@ export function McpSection(props: {
                     <ctx.ui.Button
                       icon="lock"
                       size="small"
-                      disabled={props.busy === key()}
+                      disabled={props.busy === key() || bulkBusy()}
                       onClick={() => void copyLogin(entry)}
                     >
                       {ctx.t("mcp.login")}
@@ -217,7 +419,7 @@ export function McpSection(props: {
                   />
                   <ctx.ui.Switch
                     checked={!disabled()}
-                    disabled={props.busy === key()}
+                    disabled={props.busy === key() || bulkBusy()}
                     label={ctx.t("mcp.disabled")}
                     hideLabel
                     onChange={(enabled) => void toggle(entry, enabled)}
@@ -226,14 +428,14 @@ export function McpSection(props: {
                     icon="edit"
                     size="small"
                     label={ctx.t("common.edit")}
-                    disabled={props.busy === key()}
+                    disabled={props.busy === key() || bulkBusy()}
                     onClick={() => edit(entry)}
                   />
                   <ctx.ui.IconButton
                     icon="trash"
                     size="small"
                     label={ctx.t("common.delete")}
-                    disabled={props.busy === key()}
+                    disabled={props.busy === key() || bulkBusy()}
                     onClick={() => void remove(entry)}
                   />
                 </div>

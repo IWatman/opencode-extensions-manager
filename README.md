@@ -58,7 +58,14 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
 - **Update center**
   - Checks marketplace plugins, npm/GitHub package plugins, and Claude Code imports against their original sources.
   - Updates each item independently and reports per-item results.
+  - Shows item and per-source progress while updating: "Updating X of Y: name".
   - MCP servers and skills added by hand have no source and are skipped.
+- **Search, bulk actions, and navigation**
+  - Global search across MCP servers, plugins, skills, marketplaces, catalog items, and installed marketplace plugins, with All/MCP/Plugins/Skills/Marketplaces filters and jump-to-row results.
+  - Multi-select with Select all, a selected counter, and bulk enable/disable/delete for MCP servers and skills; bulk delete for plugins.
+  - Bulk actions reuse the existing RPCs, run sequentially, show progress, and summarize successes and failures.
+  - Sort controls for MCP servers, plugins, skills, and installed marketplace plugins; the choice is remembered per list.
+  - Lightweight skeleton loading rows and Alt+1 … Alt+6 tab switching while the settings page is open.
 - **About plugin and self-update**
   - Shows the plugin version, OpenCode version, installation path, branch, and commit.
   - A Git checkout can update itself from the official GitHub repository with a fast-forward pull, dependency install when needed, and a GUI rebuild.
