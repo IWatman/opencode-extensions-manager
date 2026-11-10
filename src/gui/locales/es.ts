@@ -1,5 +1,11 @@
 export const es: Record<string, string> = {
   "page.title": "Gestor de extensiones",
+  "tabs.overview": "Resumen",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "Plugins",
+  "tabs.skills": "Habilidades",
+  "tabs.marketplaces": "Mercados",
+  "tabs.doctor": "Doctor",
   "page.description":
     "Gestiona servidores MCP, plugins y skills de OpenCode sin editar opencode.json a mano.",
   "command.group": "Extensiones",

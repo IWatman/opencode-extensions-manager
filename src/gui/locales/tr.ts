@@ -1,5 +1,11 @@
 export const tr: Record<string, string> = {
   "page.title": "Uzantı Yöneticisi",
+  "tabs.overview": "Genel bakış",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "Eklentiler",
+  "tabs.skills": "Yetenekler",
+  "tabs.marketplaces": "Pazar",
+  "tabs.doctor": "Doktor",
   "page.description": "opencode.json dosyasını elle düzenlemeden OpenCode için MCP sunucularını, eklentileri ve becerileri yönetin.",
   "command.group": "Uzantılar",
 

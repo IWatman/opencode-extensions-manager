@@ -1,5 +1,11 @@
 export const ko: Record<string, string> = {
   "page.title": "확장 관리자",
+  "tabs.overview": "개요",
+  "tabs.mcp": "MCP",
+  "tabs.plugins": "플러그인",
+  "tabs.skills": "스킬",
+  "tabs.marketplaces": "마켓",
+  "tabs.doctor": "닥터",
   "page.description": "opencode.json을 직접 편집하지 않고 OpenCode의 MCP 서버, 플러그인, 스킬을 관리합니다.",
   "command.group": "확장",
 

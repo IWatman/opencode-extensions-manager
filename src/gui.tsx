@@ -46,7 +46,7 @@ export default Plugin.define({
           keywords: "updates outdated marketplace batch versions commits",
         },
       ],
-      render: () => <ExtensionsPage ctx={ctx} />,
+      render: (input) => <ExtensionsPage ctx={ctx} target={input.target} />,
     }))
 
     ctx.add(Command, () => ({
