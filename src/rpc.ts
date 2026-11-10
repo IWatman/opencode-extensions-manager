@@ -123,6 +123,9 @@ const InstalledPlugin = Schema.Struct({
   updatedAt: Schema.String,
   version: Schema.optionalKey(Schema.String),
   commit: Schema.optionalKey(Schema.String),
+  /** Revision installed before the latest successful update, used by rollback. */
+  previousVersion: Schema.optionalKey(Schema.String),
+  previousCommit: Schema.optionalKey(Schema.String),
   mcp: Schema.Array(Schema.String),
   skills: Schema.Array(Schema.String),
   plugins: Schema.Array(Schema.String),
@@ -488,6 +491,8 @@ export const ManagerRpc = Rpc.define({
       input: portable(
         Schema.Struct({
           url: Schema.String,
+          /** Optional branch, tag, or commit; empty uses the repository default branch. */
+          ref: Schema.optionalKey(Schema.String),
           project: Schema.optionalKey(Schema.String),
         }),
       ),
@@ -556,6 +561,20 @@ export const ManagerRpc = Rpc.define({
         }),
       ),
       output: portable(StateSchema),
+    },
+    rollbackMarketplacePlugin: {
+      input: portable(
+        Schema.Struct({
+          key: Schema.String,
+          project: Schema.optionalKey(Schema.String),
+        }),
+      ),
+      output: portable(
+        Schema.Struct({
+          state: StateSchema,
+          result: BatchUpdateResult,
+        }),
+      ),
     },
     checkMarketplaceUpdates: {
       input: portable(Schema.Struct({})),

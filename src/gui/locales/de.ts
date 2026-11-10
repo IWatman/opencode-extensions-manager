@@ -361,4 +361,24 @@ export const de: Record<string, string> = {
 
   "footer.note":
     "OpenCode überwacht diese Dateien und lädt Erweiterungen nach einer Änderung automatisch neu. Starte die App neu, wenn ein Plugin weiterhin alten Code ausführt.",
+
+  "mcp.showSecrets": "Werte anzeigen",
+  "mcp.hideSecrets": "Werte ausblenden",
+  "mcp.copySanitized": "Bereinigte Konfiguration kopieren",
+  "mcp.copySanitizedDone": "MCP-Konfiguration kopiert; Werte von Umgebungsvariablen und Headern wurden durch *** ersetzt.",
+  "mcp.projectSecretWarning": "Geheimnisartige Header liegen in der Projektkonfiguration. Für Zugangsdaten ist der globale Bereich besser geeignet.",
+  "marketplaces.thirdParty": "Drittanbieter",
+  "marketplaces.trustTitle": "Drittanbieter-Marktplatz hinzufügen?",
+  "marketplaces.trustDescription": "{{url}} ist nicht der integrierte Anthropic-Marktplatz. Plugins von dort können MCP-Server, Skills und Code zu OpenCode hinzufügen. Fahre nur fort, wenn du der Quelle vertraust.",
+  "marketplaces.trustConfirm": "Marktplatz hinzufügen",
+  "marketplaces.ref": "Ref (Branch, Tag oder Commit)",
+  "marketplaces.refHint": "Optional. Leer verwendet den Standardbranch; eine /tree/<ref>-URL funktioniert ebenfalls.",
+  "marketplaces.refBadge": "ref: {{ref}}",
+  "marketplaces.autoRefresh": "Katalog automatisch aktualisieren",
+  "marketplaces.autoRefreshHint": "Marktplätze und den geöffneten Katalog alle 5 Minuten aktualisieren, solange dieser Abschnitt geöffnet ist.",
+  "marketplaces.rollback": "Zurücksetzen",
+  "marketplaces.rollbackTitle": "Marktplatz-Plugin zurücksetzen?",
+  "marketplaces.rollbackDescription": "{{name}} aus der zuvor gespeicherten Revision ({{revision}}) neu installieren. Aktuelle Plugin-Artefakte werden ersetzt; Aktivierungsstatus und Besitz-Fingerabdrücke bleiben erhalten.",
+  "marketplaces.rollbackDone": "{{name}} zurückgesetzt",
+  "marketplaces.previousRevision": "vorher: {{revision}}",
 }

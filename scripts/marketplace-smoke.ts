@@ -10,6 +10,7 @@ import {
   installMarketplacePlugin,
   normalizeInstalledMcpUrls,
   readRegistry,
+  rollbackMarketplacePlugin,
   setMarketplacePluginEnabled,
   uninstallMarketplacePlugin,
   updateMarketplacePlugin,
@@ -149,6 +150,9 @@ assert.deepEqual(registry.registry.installed[0].mcp, ["demo"])
 assert.deepEqual([...registry.registry.installed[0].skills].sort(), ["demo__broken", "demo__hello"])
 assert.ok(registry.registry.installed[0].fingerprints?.mcp.demo)
 assert.ok(registry.registry.installed[0].fingerprints?.skills.demo__hello)
+assert.equal(registry.registry.installed[0].version, "1.0.0")
+assert.equal(registry.registry.installed[0].previousVersion, undefined)
+assert.equal(registry.registry.installed[0].previousCommit, undefined)
 
 const projectKey = `local-marketplace/demo@project:${encodeURIComponent(path.resolve(project))}`
 assert.equal(registry.registry.installed[0].key, projectKey)
@@ -267,6 +271,15 @@ assert.deepEqual(registry.registry.installed[0].fingerprints, beforeFailure.fing
 
 // With the obstacle gone the same update succeeds and replaces both artifacts and fingerprints.
 await rm(path.join(paths.skillsDir, "demo__newblock"), { recursive: true, force: true })
+// Bump the published version so the successful update records the revision it replaced.
+await writeFile(
+  path.join(plugin, ".claude-plugin", "plugin.json"),
+  JSON.stringify({ name: "demo", description: "A demo plugin", version: "1.1.0" }),
+)
+const marketplacePath = path.join(marketplace, ".claude-plugin", "marketplace.json")
+const marketplaceManifest = JSON.parse(await readFile(marketplacePath, "utf8"))
+marketplaceManifest.plugins[0].version = "1.1.0"
+await writeFile(marketplacePath, JSON.stringify(marketplaceManifest, null, 2))
 await updateMarketplacePlugin(installed.key)
 document = await readScope(paths)
 assert.equal(
@@ -279,6 +292,20 @@ const helloV2 = skills.find((skill) => skill.id === "demo__hello")?.content ?? "
 assert.match(helloV2, /version two/)
 registry = await readRegistry()
 assert.notEqual(registry.registry.installed[0].fingerprints?.mcp.demo, beforeFailure.fingerprints?.mcp.demo)
+assert.equal(registry.registry.installed[0].version, "1.1.0")
+assert.equal(registry.registry.installed[0].previousVersion, "1.0.0")
+assert.equal(registry.registry.installed[0].previousCommit, undefined)
+
+// A local marketplace cannot retrieve the files of version 1.0.0 once the manifest offers 1.1.0.
+// Rollback must fail before touching the config or the registry.
+const rollbackConfigBefore = await readFile(paths.configPath, "utf8")
+const rollbackRegistryBefore = await readFile(registryFile, "utf8")
+await assert.rejects(
+  () => rollbackMarketplacePlugin(installed.key),
+  /Cannot resolve previous version 1\.0\.0/,
+)
+assert.equal(await readFile(paths.configPath, "utf8"), rollbackConfigBefore)
+assert.equal(await readFile(registryFile, "utf8"), rollbackRegistryBefore)
 
 // User edits after installation are not managed content anymore: uninstall keeps them and reports
 // exactly which artifacts it skipped.

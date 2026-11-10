@@ -361,4 +361,24 @@ export const es: Record<string, string> = {
 
   "footer.note":
     "OpenCode vigila estos archivos y recarga las extensiones automáticamente tras un cambio. Reinicia la aplicación si un plugin sigue ejecutando código antiguo.",
+
+  "mcp.showSecrets": "Mostrar valores",
+  "mcp.hideSecrets": "Ocultar valores",
+  "mcp.copySanitized": "Copiar configuración saneada",
+  "mcp.copySanitizedDone": "Configuración MCP copiada con los valores de entorno y cabeceras sustituidos por ***.",
+  "mcp.projectSecretWarning": "Hay cabeceras que parecen secretos en la configuración del proyecto. Para credenciales, prefiere el ámbito global.",
+  "marketplaces.thirdParty": "de terceros",
+  "marketplaces.trustTitle": "¿Añadir un marketplace de terceros?",
+  "marketplaces.trustDescription": "{{url}} no es el marketplace integrado de Anthropic. Los plugins de este marketplace pueden añadir servidores MCP, skills y código a OpenCode. Continúa solo si confías en su origen.",
+  "marketplaces.trustConfirm": "Añadir marketplace",
+  "marketplaces.ref": "Ref (rama, etiqueta o commit)",
+  "marketplaces.refHint": "Opcional. Vacío usa la rama predeterminada; una URL /tree/<ref> también funciona.",
+  "marketplaces.refBadge": "ref: {{ref}}",
+  "marketplaces.autoRefresh": "Actualizar catálogo automáticamente",
+  "marketplaces.autoRefreshHint": "Actualizar los marketplaces y el catálogo abierto cada 5 minutos mientras esta sección esté abierta.",
+  "marketplaces.rollback": "Revertir",
+  "marketplaces.rollbackTitle": "¿Revertir el plugin del marketplace?",
+  "marketplaces.rollbackDescription": "Reinstalar {{name}} desde su revisión anterior registrada ({{revision}}). Los artefactos actuales se sustituyen; se conservan el estado de activación y las huellas de propiedad.",
+  "marketplaces.rollbackDone": "{{name}} revertido",
+  "marketplaces.previousRevision": "anterior: {{revision}}",
 }

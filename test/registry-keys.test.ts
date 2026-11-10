@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { installedKey, normalizeRegistry } from "../src/marketplaces.ts"
+import { installedKey, normalizeRegistry, rollbackRevision } from "../src/marketplaces.ts"
 
 async function tempDir(t: import("node:test").TestContext) {
   const dir = await mkdtemp(path.join(tmpdir(), "oem-registry-"))
@@ -151,4 +151,48 @@ test("unreadable registry entries are dropped instead of crashing the migration"
     migrated.installed.map((entry) => entry.key),
     ["owner/repo/demo@global"],
   )
+})
+
+test("previous rollback revision survives registry normalization", () => {
+  const migrated = registry([
+    {
+      key: "owner/repo/demo@global",
+      marketplace: "owner/repo",
+      plugin: "demo",
+      scope: "global",
+      version: "2.0.0",
+      commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      previousVersion: "1.0.0",
+      previousCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+  ])
+  const record = migrated.installed[0]
+  assert.equal(record?.version, "2.0.0")
+  assert.equal(record?.commit, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+  assert.equal(record?.previousVersion, "1.0.0")
+  assert.equal(record?.previousCommit, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+})
+
+test("records without a previous revision stay unchanged", () => {
+  const migrated = registry([
+    {
+      key: "owner/repo/demo@global",
+      marketplace: "owner/repo",
+      plugin: "demo",
+      scope: "global",
+      version: "1.0.0",
+    },
+  ])
+  assert.equal(migrated.installed[0]?.previousVersion, undefined)
+  assert.equal(migrated.installed[0]?.previousCommit, undefined)
+})
+
+test("rollbackRevision accepts version, commit, or both", () => {
+  assert.deepEqual(rollbackRevision({ previousVersion: "1.0.0" }), { version: "1.0.0" })
+  assert.deepEqual(rollbackRevision({ previousCommit: "abcdef1" }), { commit: "abcdef1" })
+  assert.deepEqual(rollbackRevision({ previousVersion: "1.0.0", previousCommit: "abcdef1" }), {
+    version: "1.0.0",
+    commit: "abcdef1",
+  })
+  assert.throws(() => rollbackRevision({}), /No previous revision/)
 })

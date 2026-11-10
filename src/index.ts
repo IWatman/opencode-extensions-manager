@@ -45,6 +45,7 @@ import {
   normalizeMcpUrls,
   readRegistry,
   removeMarketplace,
+  rollbackMarketplacePlugin,
   setMarketplacePluginEnabled,
   uninstallMarketplacePlugin,
   updateMarketplacePlugin,
@@ -238,7 +239,7 @@ export default Plugin.define({
 
       addMarketplace: (input) =>
         withWriteLock(async () => {
-          const added = await addMarketplace(input.url)
+          const added = await addMarketplace(input.url, input.ref)
           const state = await buildState(input.project)
           if (added.repository) {
             return { kind: "repository" as const, repository: added.repository, state }
@@ -282,6 +283,12 @@ export default Plugin.define({
         withWriteLock(async () => {
           await updateMarketplacePlugin(input.key)
           return buildState(input.project)
+        }),
+
+      rollbackMarketplacePlugin: (input) =>
+        withWriteLock(async () => {
+          const result = await rollbackMarketplacePlugin(input.key)
+          return { state: await buildState(input.project), result }
         }),
 
       checkMarketplaceUpdates: () => checkMarketplaceUpdates(),
