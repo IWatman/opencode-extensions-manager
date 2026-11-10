@@ -2348,6 +2348,91 @@ function parseConfigText(text: string | undefined): unknown {
 }
 
 const repositoryMcpFiles = [".mcp.json", "mcp.json", "opencode.json", "opencode.jsonc"] as const
+const repositoryManifestFiles = ["package.json", "npm/package.json"] as const
+
+/** Returns the index of the brace that closes the object opened at `start`, ignoring strings. */
+function balancedJsonEnd(text: string, start: number): number | undefined {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < text.length; index++) {
+    const character = text[index]!
+    if (inString) {
+      if (escaped) escaped = false
+      else if (character === "\\") escaped = true
+      else if (character === '"') inString = false
+      continue
+    }
+    if (character === '"') {
+      inString = true
+      continue
+    }
+    if (character === "{") depth++
+    else if (character === "}") {
+      depth--
+      if (depth === 0) return index
+    }
+  }
+  return undefined
+}
+
+/** Returns true when a JSON snippet declares MCP servers rather than arbitrary command output. */
+function looksLikeMcpConfigText(text: string) {
+  return (
+    /"mcpServers"\s*:/.test(text) ||
+    /"mcp"\s*:\s*\{/.test(text) ||
+    /"servers"\s*:\s*\{/.test(text) ||
+    /"url"\s*:\s*"https?:\/\/[^"]*\/mcp\b/.test(text)
+  )
+}
+
+/** Extracts JSON and JSONC configs from Markdown code blocks and inline snippets. */
+function configsFromText(text: string): unknown[] {
+  const candidates = new Set<string>()
+  for (const match of text.matchAll(/```[^\n]*\n([\s\S]*?)```/g)) {
+    const body = match[1]?.trim()
+    if (body && (body.startsWith("{") || body.startsWith("[")) && looksLikeMcpConfigText(body)) {
+      candidates.add(body)
+    }
+  }
+  let skipUntil = 0
+  for (let index = 0; index < text.length; index++) {
+    if (index < skipUntil) continue
+    if (text[index] !== "{") continue
+    if (!/mcp/i.test(text.slice(index, index + 400))) continue
+    const end = balancedJsonEnd(text, index)
+    if (end === undefined) continue
+    skipUntil = end + 1
+    const candidate = text.slice(index, end + 1).trim()
+    if (looksLikeMcpConfigText(candidate)) candidates.add(candidate)
+  }
+  const values: unknown[] = []
+  for (const candidate of candidates) {
+    const value = parseConfigText(candidate)
+    if (value !== undefined) values.push(value)
+  }
+  return values
+}
+
+/** Rewrites a documented CLI command to npx when the repository publishes that CLI to npm. */
+function runnableMcpConfig(
+  config: Record<string, unknown>,
+  manifest: Record<string, unknown>,
+): { config: Record<string, unknown>; viaNpx: boolean } {
+  const command = Array.isArray(config.command)
+    ? config.command.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : []
+  const executable = command[0]
+  if (!executable || executable.includes("/") || executable.includes("\\") || executable.startsWith(".")) {
+    return { config, viaNpx: false }
+  }
+  const name = typeof manifest.name === "string" ? manifest.name : undefined
+  if (!name || manifest.private === true) return { config, viaNpx: false }
+  const bin = manifest.bin
+  const bins = isRecord(bin) ? Object.keys(bin) : typeof bin === "string" ? [name.split("/").pop() ?? name] : []
+  if (executable !== name && !bins.includes(executable)) return { config, viaNpx: false }
+  return { config: { ...config, command: ["npx", "-y", name, ...command.slice(1)] }, viaNpx: true }
+}
 
 export async function inspectRepository(url: string): Promise<RepositoryInspection> {
   const location = parseGithub(url)
@@ -2362,12 +2447,14 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
   let configs: { file: string; value: unknown }[] = []
   for (const candidate of refs) {
     const base = `https://raw.githubusercontent.com/${location.owner}/${location.repo}/${candidate}${folder ? `/${folder}` : ""}`
-    const [packageResult, readmeResult, ...configResults] = await Promise.all([
-      fetchText(`${base}/package.json`),
+    const [readmeResult, ...manifestAndConfigResults] = await Promise.all([
       fetchText(`${base}/README.md`),
+      ...repositoryManifestFiles.map((file) => fetchText(`${base}/${file}`)),
       ...repositoryMcpFiles.map((file) => fetchText(`${base}/${file}`)),
     ])
-    const results = [packageResult, readmeResult, ...configResults]
+    const manifestResults = manifestAndConfigResults.slice(0, repositoryManifestFiles.length)
+    const configResults = manifestAndConfigResults.slice(repositoryManifestFiles.length)
+    const results = [readmeResult, ...manifestAndConfigResults]
     if (results.every((result) => !result.ok && result.status === 0)) {
       throw new Error(
         `Failed to connect to GitHub: ${results.find((result) => result.error)?.error ?? "network error"}`
@@ -2375,7 +2462,9 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     }
     if (results.some((result) => result.ok)) {
       ref = candidate
-      packageJson = packageResult.ok ? parseConfigText(packageResult.text) : undefined
+      packageJson = manifestResults
+        .map((result) => (result.ok ? parseConfigText(result.text) : undefined))
+        .find((value) => value !== undefined)
       readme = readmeResult.ok ? readmeResult.text : undefined
       configs = configResults.flatMap((result, index) =>
         result.ok ? [{ file: repositoryMcpFiles[index]!, value: parseConfigText(result.text) }] : [],
@@ -2402,6 +2491,26 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     }
   }
 
+  if (readme) {
+    for (const value of configsFromText(readme)) {
+      const parsed = proposalsFromConfig(value, "MCP server found in README")
+      for (const proposal of parsed.proposals) {
+        if (!proposal.name || !isRecord(proposal.config)) continue
+        const runnable = runnableMcpConfig(proposal.config, manifest)
+        addMcp(
+          proposal.name,
+          runnable.config,
+          runnable.viaNpx
+            ? "MCP server found in README; the CLI runs through npx"
+            : "MCP server found in README",
+        )
+      }
+      if (parsed.skipped.length > 0) {
+        notes.push(`Skipped invalid MCP server configuration in README: ${parsed.skipped.join(", ")}.`)
+      }
+    }
+  }
+
   const mcpUrl = readme?.match(/https?:\/\/[^\s"'<>)]+\/mcp(?:\?[^\s"'<>)]*)?/i)?.[0]
   if (mcpUrl) {
     addMcp(location.repo, { type: "remote", url: mcpUrl }, "MCP server URL found in README")
@@ -2414,7 +2523,19 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
   const exports = isRecord(manifest.exports) ? manifest.exports : undefined
   const isPrivate = manifest.private === true
   const hasBin = manifest.bin !== undefined
-  if (packageName && !isPrivate && (hasBin || keywords.some((value) => value === "mcp" || value.includes("modelcontextprotocol")))) {
+  const packageInstalled = proposals.some(
+    (item) =>
+      item.kind === "mcp" &&
+      isRecord(item.config) &&
+      Array.isArray(item.config.command) &&
+      item.config.command.includes(packageName),
+  )
+  if (
+    packageName &&
+    !isPrivate &&
+    !packageInstalled &&
+    (hasBin || keywords.some((value) => value === "mcp" || value.includes("modelcontextprotocol")))
+  ) {
     addMcp(location.repo, { type: "local", command: ["npx", "-y", packageName] }, `Package ${packageName} runs through npx`)
   }
   if (
