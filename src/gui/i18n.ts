@@ -314,7 +314,7 @@ export const catalog: Catalog = {
     "doctor.emptyHint": "Configuration files and MCP servers look healthy.",
     "doctor.refresh": "Run checks",
     "doctor.footer":
-      "Doctor only refreshes state, retries failed servers, reveals paths, and removes duplicate plugin entries. It never rewrites configuration on its own.",
+      "Doctor refreshes state, retries failed servers, reveals paths, creates missing folders, exports reports, and restores backups after confirmation. It never rewrites configuration without an explicit action.",
     "doctor.severity.error": "Error",
     "doctor.severity.warning": "Warning",
     "doctor.severity.info": "Info",
@@ -365,6 +365,39 @@ export const catalog: Catalog = {
 
     "footer.note":
       "OpenCode watches these files and reloads extensions automatically after a change. Restart the app if a plugin keeps running its old code.",
+
+      "common.close": "Close",
+    "diff.noChanges": "No changes.",
+    "mcp.preview": "Preview changes",
+    "mcp.previewTitle": "Config preview",
+    "mcp.previewHint":
+      "This is the exact config text a save would write. The file is not touched until you click Save.",
+    "doctor.ensureScope": "Create missing folders/config",
+    "doctor.ensured": "Created missing folders for {{scope}}",
+    "doctor.exportReport": "Export report",
+    "doctor.reportExported": "Doctor report saved",
+    "doctor.backups": "Backups",
+    "doctor.backupsHint":
+      "Automatic .bak copies of the global and project config files and the marketplace registry.",
+    "doctor.backupSafetyHint":
+      "Restoring validates JSONC, keeps the current file as .bak, and writes atomically. Nothing is restored without confirmation.",
+    "doctor.refreshBackups": "Refresh backups",
+    "doctor.backupsLoading": "Loading backups…",
+    "doctor.backupsEmpty": "No backups yet.",
+    "doctor.backupsEmptyHint": "A .bak file appears here after the first configuration change.",
+    "doctor.backupError": "Could not read backups",
+    "doctor.backupConfig": "Config backup",
+    "doctor.backupRegistry": "Registry backup",
+    "doctor.backupMeta": "{{size}} · current file: {{path}}",
+    "doctor.backupDiff": "Diff",
+    "doctor.backupDiffTitle": "Backup diff",
+    "doctor.backupDiffHint":
+      "Current file versus the backup from {{date}}. − lines are current; + lines come from the backup.",
+    "doctor.backupRestore": "Restore",
+    "doctor.backupRestoreTitle": "Restore this backup?",
+    "doctor.backupRestoreDescription":
+      "The current {{path}} will be kept as a .bak file and replaced with the backup from {{date}}. The backup is validated as JSONC first.",
+    "doctor.backupRestored": "Restored {{path}}",
   },
 
   ru: {
@@ -670,7 +703,7 @@ export const catalog: Catalog = {
     "doctor.emptyHint": "Файлы конфигурации и MCP-серверы в порядке.",
     "doctor.refresh": "Запустить проверку",
     "doctor.footer":
-      "Диагностика только обновляет состояние, повторяет подключение к сбойным серверам, показывает пути и удаляет повторяющиеся записи плагинов. Она никогда не переписывает конфигурацию сама.",
+      "Диагностика обновляет состояние, повторяет подключение к сбойным серверам, показывает пути, создаёт недостающие папки, экспортирует отчёты и восстанавливает резервные копии после подтверждения. Она никогда не переписывает конфигурацию без явного действия.",
     "doctor.severity.error": "Ошибка",
     "doctor.severity.warning": "Предупреждение",
     "doctor.severity.info": "Информация",
@@ -724,6 +757,39 @@ export const catalog: Catalog = {
 
     "footer.note":
       "OpenCode следит за этими файлами и перезагружает расширения после изменений. Если плагин продолжает работать по-старому, перезапустите приложение.",
+
+      "common.close": "Закрыть",
+    "diff.noChanges": "Изменений нет.",
+    "mcp.preview": "Предпросмотр изменений",
+    "mcp.previewTitle": "Предпросмотр конфигурации",
+    "mcp.previewHint":
+      "Точный текст конфигурации, который будет записан при сохранении. Файл не меняется до нажатия «Сохранить».",
+    "doctor.ensureScope": "Создать недостающие папки/конфиг",
+    "doctor.ensured": "Недостающие папки созданы для области «{{scope}}»",
+    "doctor.exportReport": "Экспорт отчёта",
+    "doctor.reportExported": "Отчёт диагностики сохранён",
+    "doctor.backups": "Резервные копии",
+    "doctor.backupsHint":
+      "Автоматические копии .bak глобального и проектного конфигов и реестра маркетплейсов.",
+    "doctor.backupSafetyHint":
+      "Перед восстановлением проверяется JSONC, текущий файл сохраняется как .bak, запись атомарная. Без подтверждения ничего не восстанавливается.",
+    "doctor.refreshBackups": "Обновить список",
+    "doctor.backupsLoading": "Загрузка резервных копий…",
+    "doctor.backupsEmpty": "Резервных копий пока нет.",
+    "doctor.backupsEmptyHint": "Файл .bak появится здесь после первого изменения конфигурации.",
+    "doctor.backupError": "Не удалось прочитать резервные копии",
+    "doctor.backupConfig": "Копия конфига",
+    "doctor.backupRegistry": "Копия реестра",
+    "doctor.backupMeta": "{{size}} · текущий файл: {{path}}",
+    "doctor.backupDiff": "Различия",
+    "doctor.backupDiffTitle": "Различия с резервной копией",
+    "doctor.backupDiffHint":
+      "Текущий файл и копия от {{date}}. Строки «−» есть в текущем файле; строки «+» придут из копии.",
+    "doctor.backupRestore": "Восстановить",
+    "doctor.backupRestoreTitle": "Восстановить эту копию?",
+    "doctor.backupRestoreDescription":
+      "Текущий {{path}} будет сохранён как .bak и заменён копией от {{date}}. Сначала копия проверяется как JSONC.",
+    "doctor.backupRestored": "Восстановлено: {{path}}",
   },
   de,
   es,

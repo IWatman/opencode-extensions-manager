@@ -1,5 +1,6 @@
-import { createSignal, For, Show } from "solid-js"
-import { ManagerRpc, type ManagerState, type McpEntry, type Scope } from "../rpc"
+import { createEffect, createSignal, For, Show } from "solid-js"
+import { ManagerRpc, type ConfigPreview, type ManagerState, type McpEntry, type Scope } from "../rpc"
+import { DiffView } from "./diff-view"
 import {
   errorText,
   formatCommand,
@@ -252,9 +253,32 @@ function McpDialog(props: {
   )
   const [disabled, setDisabled] = createSignal(mcpDisabled(config))
   const [saving, setSaving] = createSignal(false)
+  const [previewing, setPreviewing] = createSignal(false)
+  const [preview, setPreview] = createSignal<ConfigPreview>()
   const [error, setError] = createSignal<string>()
 
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
+
+  // A preview describes the values at the moment it was requested; hide it as soon as any field
+  // changes, so an old diff can never look like the current form.
+  createEffect(() => {
+    name()
+    type()
+    command()
+    cwd()
+    environment()
+    url()
+    headers()
+    oauthMode()
+    oauthClientId()
+    oauthClientSecret()
+    oauthScope()
+    oauthCallbackPort()
+    oauthRedirectUri()
+    oauthMetadataUrl()
+    disabled()
+    setPreview(undefined)
+  })
 
   const copyLogin = async () => {
     const server = name().trim()
@@ -272,58 +296,84 @@ function McpDialog(props: {
     }
   }
 
+  const buildConfig = (): Record<string, unknown> => {
+    const next: Record<string, unknown> = { type: type() }
+    // `null` tells the server to delete an optional field that the user cleared.
+    next.disabled = disabled() ? true : null
+    if (type() === "local") {
+      const parts = splitCommand(command())
+      if (parts.length === 0) throw new Error(ctx.t("mcp.commandRequired"))
+      const pairs = parsePairs(environment())
+      if (pairs.invalid.length > 0) {
+        throw new Error(ctx.t("common.invalidLines", { lines: pairs.invalid.join(", ") }))
+      }
+      next.command = parts
+      next.environment = Object.keys(pairs.values).length > 0 ? pairs.values : null
+      next.cwd = cwd().trim() || null
+    } else {
+      if (!url().trim()) throw new Error(ctx.t("mcp.urlRequired"))
+      const pairs = parsePairs(headers())
+      if (pairs.invalid.length > 0) {
+        throw new Error(ctx.t("common.invalidLines", { lines: pairs.invalid.join(", ") }))
+      }
+      next.url = url().trim()
+      next.headers = Object.keys(pairs.values).length > 0 ? pairs.values : null
+      if (oauthMode() === "auto") {
+        // `null` removes the field, leaving OpenCode's automatic OAuth detection in charge.
+        next.oauth = null
+      } else if (oauthMode() === "disabled") {
+        next.oauth = false
+      } else {
+        const oauth: Record<string, unknown> = isRecord(record?.oauth) ? { ...record.oauth } : {}
+        const put = (key: string, value: string) => {
+          if (value.trim()) oauth[key] = value.trim()
+          else delete oauth[key]
+        }
+        put("client_id", oauthClientId())
+        put("client_secret", oauthClientSecret())
+        put("scope", oauthScope())
+        put("redirect_uri", oauthRedirectUri())
+        put("auth_server_metadata_url", oauthMetadataUrl())
+        const port = oauthCallbackPort().trim()
+        if (port) {
+          const parsed = Number(port)
+          if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535)
+            throw new Error(ctx.t("mcp.oauthPortInvalid"))
+          oauth.callback_port = parsed
+        } else {
+          delete oauth.callback_port
+        }
+        next.oauth = oauth
+      }
+    }
+    return next
+  }
+
+  const showPreview = async () => {
+    setError(undefined)
+    try {
+      const next = buildConfig()
+      setPreviewing(true)
+      const result = await ctx.client.rpc(ManagerRpc).previewMcp({
+        scope: props.scope,
+        ...target(),
+        name: name().trim(),
+        ...(props.entry ? { originalName: props.entry.name } : {}),
+        config: next,
+      })
+      setPreview(result)
+    } catch (previewError) {
+      setPreview(undefined)
+      setError(errorText(previewError))
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   const save = async () => {
     setError(undefined)
     try {
-      const next: Record<string, unknown> = { type: type() }
-      // `null` tells the server to delete an optional field that the user cleared.
-      next.disabled = disabled() ? true : null
-      if (type() === "local") {
-        const parts = splitCommand(command())
-        if (parts.length === 0) throw new Error(ctx.t("mcp.commandRequired"))
-        const pairs = parsePairs(environment())
-        if (pairs.invalid.length > 0) {
-          throw new Error(ctx.t("common.invalidLines", { lines: pairs.invalid.join(", ") }))
-        }
-        next.command = parts
-        next.environment = Object.keys(pairs.values).length > 0 ? pairs.values : null
-        next.cwd = cwd().trim() || null
-      } else {
-        if (!url().trim()) throw new Error(ctx.t("mcp.urlRequired"))
-        const pairs = parsePairs(headers())
-        if (pairs.invalid.length > 0) {
-          throw new Error(ctx.t("common.invalidLines", { lines: pairs.invalid.join(", ") }))
-        }
-        next.url = url().trim()
-        next.headers = Object.keys(pairs.values).length > 0 ? pairs.values : null
-        if (oauthMode() === "auto") {
-          // `null` removes the field, leaving OpenCode's automatic OAuth detection in charge.
-          next.oauth = null
-        } else if (oauthMode() === "disabled") {
-          next.oauth = false
-        } else {
-          const oauth: Record<string, unknown> = isRecord(record?.oauth) ? { ...record.oauth } : {}
-          const put = (key: string, value: string) => {
-            if (value.trim()) oauth[key] = value.trim()
-            else delete oauth[key]
-          }
-          put("client_id", oauthClientId())
-          put("client_secret", oauthClientSecret())
-          put("scope", oauthScope())
-          put("redirect_uri", oauthRedirectUri())
-          put("auth_server_metadata_url", oauthMetadataUrl())
-          const port = oauthCallbackPort().trim()
-          if (port) {
-            const parsed = Number(port)
-            if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535)
-              throw new Error(ctx.t("mcp.oauthPortInvalid"))
-            oauth.callback_port = parsed
-          } else {
-            delete oauth.callback_port
-          }
-          next.oauth = oauth
-        }
-      }
+      const next = buildConfig()
 
       setSaving(true)
       const state = await ctx.client.rpc(ManagerRpc).saveMcp({
@@ -349,6 +399,14 @@ function McpDialog(props: {
         <>
           <ctx.ui.Button onClick={props.onClose} disabled={saving()}>
             {ctx.t("common.cancel")}
+          </ctx.ui.Button>
+          <ctx.ui.Button
+            icon="eye"
+            busy={previewing()}
+            disabled={saving()}
+            onClick={() => void showPreview()}
+          >
+            {ctx.t("mcp.preview")}
           </ctx.ui.Button>
           <ctx.ui.Button variant="contrast" busy={saving()} onClick={() => void save()}>
             {ctx.t("common.save")}
@@ -537,6 +595,19 @@ function McpDialog(props: {
           label={ctx.t("mcp.disabled")}
           description={ctx.t("mcp.disabledHint")}
         />
+
+        <Show when={preview()}>
+          {(data) => (
+            <div class="oem-preview">
+              <div class="oem-preview-head">
+                <span class="oem-field-label">{ctx.t("mcp.previewTitle")}</span>
+                <span class="oem-hint">{ctx.t("mcp.previewHint")}</span>
+              </div>
+              <span class="oem-path">{data().path}</span>
+              <DiffView ctx={ctx} before={data().before} after={data().after} />
+            </div>
+          )}
+        </Show>
 
         <Show when={error()}>
           <div class="oem-error">{error()}</div>
