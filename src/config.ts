@@ -145,6 +145,20 @@ function detectEol(text: string) {
   return text.includes("\r\n") ? "\r\n" : "\n"
 }
 
+/** Applies mutations to a document without writing it, so previews use the same code as saves. */
+function applyMutations(text: string, mutations: readonly Mutation[]) {
+  let next = text.trim() ? text : "{}\n"
+  const eol = detectEol(text)
+  for (const mutation of mutations) {
+    const edits = modify(next, mutation.path as (string | number)[], mutation.value, {
+      formattingOptions: { insertSpaces: true, tabSize: 2, eol },
+    })
+    next = applyEdits(next, edits)
+  }
+  if (!next.endsWith("\n")) next += eol
+  return next
+}
+
 /** Writes through a temporary file, keeping the previous contents as `<file>.bak`. */
 export async function writeAtomic(file: string, content: string, backup = true) {
   await mkdir(path.dirname(file), { recursive: true })
@@ -171,16 +185,22 @@ export async function updateScope(
   }
   const mutations = build(current.data)
   if (mutations.length === 0) return
-  let text = current.text.trim() ? current.text : "{}\n"
-  const eol = detectEol(current.text)
-  for (const mutation of mutations) {
-    const edits = modify(text, mutation.path as (string | number)[], mutation.value, {
-      formattingOptions: { insertSpaces: true, tabSize: 2, eol },
-    })
-    text = applyEdits(text, edits)
+  await writeAtomic(paths.configPath, applyMutations(current.text, mutations), current.exists)
+}
+
+/**
+ * Creates the folders a scope writes to and an empty config when it has none. Existing files are
+ * never changed; `wx` closes the small race between checking and creating the config.
+ */
+export async function ensureScope(paths: ScopePaths) {
+  await mkdir(paths.configDir, { recursive: true })
+  await mkdir(paths.skillsDir, { recursive: true })
+  if (await isFile(paths.configPath)) return
+  try {
+    await writeFile(paths.configPath, "{}\n", { encoding: "utf8", flag: "wx" })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
   }
-  if (!text.endsWith("\n")) text += eol
-  await writeAtomic(paths.configPath, text, current.exists)
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -296,10 +316,14 @@ function mergeMcpConfig(existing: unknown, next: Record<string, unknown>, remova
   return next
 }
 
-export async function saveMcp(
-  paths: ScopePaths,
-  input: { name: string; originalName?: string; config: unknown },
-) {
+interface PreparedMcp {
+  readonly name: string
+  readonly originalName?: string
+  readonly config: Record<string, unknown>
+  readonly removals: readonly string[]
+}
+
+function prepareMcp(input: { name: string; originalName?: string; config: unknown }): PreparedMcp {
   const name = input.name
   const originalName = input.originalName
   safeKey(name, "MCP server name")
@@ -315,37 +339,76 @@ export async function saveMcp(
     else desired[key] = value
   }
   const config = validateMcpConfig(desired)
+  return {
+    name,
+    ...(originalName === undefined ? {} : { originalName }),
+    config,
+    removals,
+  }
+}
 
-  await updateScope(paths, (data) => {
-    const servers = mcpServers(data)
-    if (originalName === undefined) {
-      if (servers[name] !== undefined) throw new Error(`MCP server "${name}" already exists`)
-    } else if (originalName !== name && servers[name] !== undefined) {
-      throw new Error(`MCP server "${name}" already exists`)
+function mcpMutations(data: Record<string, unknown>, prepared: PreparedMcp): Mutation[] {
+  const { name, originalName, config, removals } = prepared
+  const servers = mcpServers(data)
+  if (originalName === undefined) {
+    if (servers[name] !== undefined) throw new Error(`MCP server "${name}" already exists`)
+  } else if (originalName !== name && servers[name] !== undefined) {
+    throw new Error(`MCP server "${name}" already exists`)
+  }
+  const existing = servers[originalName ?? name]
+  const merged = mergeMcpConfig(existing, config, removals)
+  if (originalName !== undefined && originalName !== name) {
+    return [
+      { path: ["mcp", "servers", originalName], value: undefined },
+      { path: ["mcp", "servers", name], value: merged },
+    ]
+  }
+  if (!isRecord(existing) || existing.type !== config.type) {
+    return [{ path: ["mcp", "servers", name], value: merged }]
+  }
+  // Patch the fields instead of replacing the object, so comments and formatting inside it survive where possible.
+  const mutations: Mutation[] = Object.entries(merged).map(([key, value]) => ({
+    path: ["mcp", "servers", name, key],
+    value,
+  }))
+  for (const key of Object.keys(existing)) {
+    if (!Object.hasOwn(merged, key)) {
+      mutations.push({ path: ["mcp", "servers", name, key], value: undefined })
     }
-    const existing = servers[originalName ?? name]
-    const merged = mergeMcpConfig(existing, config, removals)
-    if (originalName !== undefined && originalName !== name) {
-      return [
-        { path: ["mcp", "servers", originalName], value: undefined },
-        { path: ["mcp", "servers", name], value: merged },
-      ]
-    }
-    if (!isRecord(existing) || existing.type !== config.type) {
-      return [{ path: ["mcp", "servers", name], value: merged }]
-    }
-    // Patch the fields instead of replacing the object, so comments and formatting inside it survive where possible.
-    const mutations: Mutation[] = Object.entries(merged).map(([key, value]) => ({
-      path: ["mcp", "servers", name, key],
-      value,
-    }))
-    for (const key of Object.keys(existing)) {
-      if (!Object.hasOwn(merged, key)) {
-        mutations.push({ path: ["mcp", "servers", name, key], value: undefined })
-      }
-    }
-    return mutations
-  })
+  }
+  return mutations
+}
+
+export async function saveMcp(
+  paths: ScopePaths,
+  input: { name: string; originalName?: string; config: unknown },
+) {
+  const prepared = prepareMcp(input)
+  await updateScope(paths, (data) => mcpMutations(data, prepared))
+}
+
+export interface ConfigPreview {
+  readonly before: string
+  readonly after: string
+  readonly path: string
+}
+
+/** Renders the config a save would write, without touching the file or creating a backup. */
+export async function previewMcp(
+  paths: ScopePaths,
+  input: { name: string; originalName?: string; config: unknown },
+): Promise<ConfigPreview> {
+  const prepared = prepareMcp(input)
+  const current = await readScope(paths)
+  if (current.errors.length > 0) {
+    throw new Error(`Cannot edit ${paths.configPath}: ${current.errors.join("; ")}`)
+  }
+  const mutations = mcpMutations(current.data, prepared)
+  return {
+    before: current.text,
+    after: mutations.length > 0 ? applyMutations(current.text, mutations) : current.text,
+    path: paths.configPath,
+  }
 }
 
 export async function removeMcp(paths: ScopePaths, name: string) {

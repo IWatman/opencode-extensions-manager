@@ -587,4 +587,74 @@ export const styles = `
   outline-offset: -2px;
   border-radius: 6px;
 }
+
+/* Config previews and backup diffs */
+.oem-diff-block,
+.oem-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oem-preview {
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.oem-preview-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oem-diff {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 6px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  line-height: 1.55;
+  background: color-mix(in srgb, currentColor 2%, transparent);
+}
+
+.oem-diff-line {
+  display: grid;
+  grid-template-columns: 3.5em 3.5em 1.4em minmax(0, 1fr);
+  gap: 4px;
+  padding: 0 8px;
+  tab-size: 2;
+}
+
+.oem-diff-gutter {
+  text-align: right;
+  opacity: 0.4;
+  user-select: none;
+}
+
+.oem-diff-prefix {
+  opacity: 0.75;
+  user-select: none;
+}
+
+.oem-diff-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.oem-diff-add {
+  background: color-mix(in srgb, #3fb950 14%, transparent);
+}
+
+.oem-diff-remove {
+  background: color-mix(in srgb, #e5484d 14%, transparent);
+}
+
+.oem-diff-context {
+  opacity: 0.8;
+}
 `

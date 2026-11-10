@@ -75,6 +75,33 @@ const Diagnostic = Schema.Struct({
 })
 export type Diagnostic = typeof Diagnostic.Type
 
+const ConfigBackup = Schema.Struct({
+  /** `.bak` file to list, diff, or restore. */
+  path: Schema.String,
+  /** Live file this backup would replace. */
+  target: Schema.String,
+  modifiedAt: Schema.String,
+  size: Schema.Finite,
+  kind: Schema.Literals(["config", "registry"]),
+  scope: Scope,
+})
+export type ConfigBackup = typeof ConfigBackup.Type
+
+const ConfigPreview = Schema.Struct({
+  before: Schema.String,
+  after: Schema.String,
+  path: Schema.String,
+})
+export type ConfigPreview = typeof ConfigPreview.Type
+
+const ConfigBackupDiff = Schema.Struct({
+  before: Schema.String,
+  after: Schema.String,
+  path: Schema.String,
+  backupPath: Schema.String,
+})
+export type ConfigBackupDiff = typeof ConfigBackupDiff.Type
+
 const MarketplaceInfo = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -708,6 +735,71 @@ export const ManagerRpc = Rpc.define({
         }),
       ),
       output: portable(SelfUpdateResult),
+    },
+
+    /* ------------------------------------------------------------------------------------------ */
+    /* Config safety: backups, previews, scope setup, and Doctor report                           */
+    /* ------------------------------------------------------------------------------------------ */
+
+    configBackups: {
+      input: portable(Schema.Struct(TargetInput)),
+      output: portable(
+        Schema.Struct({
+          /** Config backups for the selected scope plus the marketplace registry backup. */
+          backups: Schema.Array(ConfigBackup),
+        }),
+      ),
+    },
+    configBackupDiff: {
+      input: portable(
+        Schema.Struct({
+          /** Optional: the scope can be inferred from a known backup path. */
+          scope: Schema.optionalKey(Scope),
+          project: Schema.optionalKey(Schema.String),
+          /** Exact `.bak` path returned by `configBackups`. */
+          path: Schema.String,
+        }),
+      ),
+      output: portable(ConfigBackupDiff),
+    },
+    restoreConfigBackup: {
+      input: portable(
+        Schema.Struct({
+          ...TargetInput,
+          /** Exact `.bak` path returned by `configBackups`. */
+          path: Schema.String,
+        }),
+      ),
+      output: portable(StateSchema),
+    },
+    previewMcp: {
+      input: portable(
+        Schema.Struct({
+          ...TargetInput,
+          name: Schema.String,
+          originalName: Schema.optionalKey(Schema.String),
+          config: Schema.Unknown,
+        }),
+      ),
+      output: portable(ConfigPreview),
+    },
+    ensureScope: {
+      input: portable(Schema.Struct(TargetInput)),
+      output: portable(StateSchema),
+    },
+    exportDoctorReport: {
+      input: portable(
+        Schema.Struct({
+          ...TargetInput,
+          /** The Doctor state shown in the GUI; written as a readable Markdown snapshot. */
+          state: Schema.Unknown,
+        }),
+      ),
+      output: portable(
+        Schema.Struct({
+          path: Schema.String,
+        }),
+      ),
     },
   },
   events: {},

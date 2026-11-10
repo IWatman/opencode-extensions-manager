@@ -12,6 +12,7 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Local servers with command, working directory, and environment variables.
   - Remote servers with URL, headers, and OAuth configuration.
   - Enable/disable without deleting the entry.
+  - Preview the exact before/after config text before saving.
   - Runtime status: connected, starting, disabled, failed, sign-in required.
   - Environment and header values are masked in the list; the eye button reveals them.
   - **Copy sanitized config** replaces environment, header, and OAuth client secret values with `***`.
@@ -46,7 +47,8 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - Comments and formatting are preserved.
   - Atomic writes.
   - `.bak` backup before every change.
-  - Invalid JSONC blocks writes instead of corrupting the file.
+  - Backup history with unified diffs and confirmed restore for config files and the marketplace registry.
+  - Invalid JSONC blocks writes and restores instead of corrupting the file.
 - **Localization**
   - English, Russian, Chinese (Simplified), Chinese (Traditional), Spanish, French, German, Japanese, Korean, Italian, Polish, Turkish, and Ukrainian UI.
   - Other locales fall back to English.
@@ -75,8 +77,9 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
   - A restart is required after updating the plugin itself.
 - **Doctor**
   - Checks invalid JSONC and parse errors, duplicate MCP names across scopes, duplicate plugin entries, invalid MCP and plugin entries, failed or sign-in-required MCP servers, missing config files, and missing or unreadable skills folders.
-  - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, and remove duplicate plugin entries with confirmation.
-  - Never rewrites configuration on its own.
+  - Lists config and registry backups with date, size, diff, and confirmed restore.
+  - Offers safe actions only: run checks, reveal paths, retry failed MCP servers, copy sign-in commands, create missing folders/config, export a Markdown report, and remove duplicate plugin entries with confirmation.
+  - Never rewrites configuration on its own; restores and folder creation run only after an explicit click.
 
 ## Requirements
 
@@ -158,6 +161,7 @@ Project scope uses the nearest `.opencode` directory, matching OpenCode's own co
 
 - Add local or remote servers.
 - Edit name, type, command/URL, environment, headers, and OAuth settings.
+- Click **Preview changes** to see the exact config diff before saving. Preview never writes the file or creates a `.bak`.
 - Toggle a server without deleting it.
 - Environment and header values are hidden in each row. Use the eye button to reveal them for the current visit.
 - **Copy sanitized config** copies the server config with environment and header values replaced by `***`; the edit dialog always shows real values while you edit.
@@ -253,6 +257,10 @@ Safe actions offered by Doctor:
 - **Retry** reconnects a failed MCP server.
 - **Sign in** copies `opencode mcp auth <server>` for servers that need authentication.
 - **Remove #N** removes a duplicate plugin entry through the manager's existing RPC, after confirmation and with a `.bak` backup.
+- **Create missing folders/config** creates the config directory, skills directory, and an empty config file when absent. Existing files are not overwritten.
+- **Export report** writes a readable Markdown snapshot to the OpenCode temp folder and reveals or copies its path.
+
+The **Backups** section lists existing `.bak` files for the selected scopes and the marketplace registry. **Diff** shows a unified before/after view, and **Restore** asks for confirmation, validates the backup as JSONC, keeps the current file as `.bak`, and writes atomically.
 
 Doctor never rewrites configuration on its own. Fixes that require editing the config, such as duplicate MCP names across scopes, invalid entries, or skills folder permissions, are only reported for you to handle manually.
 
@@ -353,7 +361,7 @@ After changing GUI code, run `npm run build` and restart OpenCode Desktop. Serve
 - GitHub API rate limits apply when fetching marketplace plugin trees. Trees are cached for five minutes.
 - Update checks use version metadata or resolved GitHub commit SHAs. A local marketplace that changes files without changing either is reported as current.
 - Rollback needs a recorded previous revision. GitHub installs can fetch the old commit; a local marketplace without an older version in its manifest cannot recover the files, and the rollback stops before changing anything.
-- Doctor does not rewrite configuration on its own except for the explicit duplicate-plugin-entry removal action.
+- Doctor does not rewrite configuration on its own except for the explicit duplicate-plugin-entry removal and backup-restore actions. Backup restore validates JSONC first and keeps the previous file as `.bak`.
 - Skills are scanned one level deep: `<skillsDir>/<id>/SKILL.md` and `<skillsDir>/<id>.md`.
 - The OAuth browser flow is started by the OpenCode CLI, not by the manager.
 - Marketplace installations are always manual; nothing from the default catalog is installed automatically.
