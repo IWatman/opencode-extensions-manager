@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { readFile } from "node:fs/promises"
+import { readFile, realpath } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type {
@@ -166,10 +166,15 @@ export function githubRepoFromUrl(input: string | undefined): string | undefined
   }
 }
 
-function samePath(left: string, right: string) {
+async function samePath(left: string, right: string) {
   const normalize = (value: string) =>
     process.platform === "win32" ? path.resolve(value).toLowerCase() : path.resolve(value)
-  return normalize(left) === normalize(right)
+  try {
+    const [resolvedLeft, resolvedRight] = await Promise.all([realpath(left), realpath(right)])
+    return normalize(resolvedLeft) === normalize(resolvedRight)
+  } catch {
+    return normalize(left) === normalize(right)
+  }
 }
 
 function inferInstallKind(root: string): SelfUpdateInstallKind {
@@ -189,7 +194,7 @@ async function readGitInfo(root: string, expectedRepo: string): Promise<GitInfo>
   const kind = inferInstallKind(root)
   try {
     const top = await git(root, ["rev-parse", "--show-toplevel"], 5_000)
-    if (!samePath(top, root)) {
+    if (!(await samePath(top, root))) {
       return {
         kind,
         path: root,
