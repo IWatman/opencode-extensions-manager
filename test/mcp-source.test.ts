@@ -262,6 +262,55 @@ test("inspectMcpSource filters GitHub repository proposals to MCP servers only",
   assert.ok(inspection.notes.some((note) => note.includes("Plugins tab")))
 })
 
+test("inspectMcpSource finds a JSON config embedded in a GitHub README", async (t) => {
+  const calls = mockFetch(t, {
+    "https://raw.githubusercontent.com/vercel-labs/agent-desktop/main/README.md": [
+      "# agent-desktop",
+      "",
+      "## MCP",
+      "",
+      "```json",
+      '{ "mcpServers": { "agent-desktop": { "command": "agent-desktop", "args": ["mcp"] } } }',
+      "```",
+      "",
+    ].join("\n"),
+    "https://raw.githubusercontent.com/vercel-labs/agent-desktop/main/npm/package.json": {
+      name: "agent-desktop",
+      bin: { "agent-desktop": "bin/agent-desktop" },
+    },
+  })
+
+  const inspection = await inspectMcpSource("https://github.com/vercel-labs/agent-desktop")
+
+  assert.ok(
+    calls.includes("https://raw.githubusercontent.com/vercel-labs/agent-desktop/main/npm/package.json"),
+  )
+  assert.equal(inspection.name, "agent-desktop")
+  assert.equal(inspection.proposals.length, 1)
+  assert.equal(inspection.proposals[0]?.name, "agent-desktop")
+  assert.deepEqual(configOf(inspection.proposals[0]), {
+    type: "local",
+    command: ["npx", "-y", "agent-desktop", "mcp"],
+  })
+  assert.match(inspection.proposals[0]?.reason ?? "", /npx/)
+})
+
+test("inspectMcpSource reads inline README JSON without a package manifest", async (t) => {
+  mockFetch(t, {
+    "https://raw.githubusercontent.com/acme/tool/main/README.md":
+      'Add this to your config: { "mcpServers": { "custom": { "command": "custom-mcp", "args": ["serve"] } } } and restart.',
+  })
+
+  const inspection = await inspectMcpSource("https://github.com/acme/tool")
+
+  assert.equal(inspection.proposals.length, 1)
+  assert.equal(inspection.proposals[0]?.name, "custom")
+  assert.deepEqual(configOf(inspection.proposals[0]), {
+    type: "local",
+    command: ["custom-mcp", "serve"],
+  })
+})
+
 test("inspectMcpSource rejects empty and unsupported sources", async () => {
   await assert.rejects(() => inspectMcpSource("   "), /Enter a GitHub URL/)
   await assert.rejects(() => inspectMcpSource("ftp://example.com/mcp"), /Unsupported source/)
