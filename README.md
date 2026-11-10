@@ -55,6 +55,8 @@ A desktop GUI plugin for **OpenCode** that adds a **Settings → Extensions Mana
 - **About plugin and self-update**
   - Shows the plugin version, OpenCode version, installation path, branch, and commit.
   - A Git checkout can update itself from the official GitHub repository with a fast-forward pull, dependency install when needed, and a GUI rebuild.
+  - Shows upcoming commits and keeps a 20-entry update/rollback history in the global config folder.
+  - Supports the `main` channel and semver `stable` tags, plus startup, daily, or manual checks with an About tab badge.
   - Package installs are updated through OpenCode's plugin service.
   - A restart is required after updating the plugin itself.
 - **Doctor**
@@ -202,8 +204,11 @@ MCP servers and skills added by hand have no update source and are left alone.
 
 The **About plugin** tab shows the plugin version, OpenCode version, repository, license, installation path, branch, and current commit.
 
-- **Check for updates** compares a Git checkout with `origin/main` and also asks OpenCode's plugin service about package installs.
-- **Update plugin** fast-forwards a clean checkout on `main`, runs `npm install` when package files changed, and rebuilds the GUI bundle. Package installs are updated through OpenCode's plugin service.
+- **Channel** selects `main` (the latest commit, default) or `stable` (the highest semver release tag on origin, such as `v0.2.0` or `0.2.0`). Stable checks fetch tags from the official remote and refuse to apply when no release tag exists.
+- **Check frequency** controls automatic checks when the settings page opens: on startup, daily (at most once per 24 hours), or manual. The About tab shows a warning badge while an update is available, and **Check for updates** always works.
+- **Check for updates** compares a Git checkout with the selected target and also asks OpenCode's plugin service about package installs. **What's new** lists up to 20 commits between the checkout and that target.
+- **Update plugin** fast-forwards a clean checkout on `main` or to the selected stable tag, runs `npm install` when package files changed, and rebuilds the GUI bundle. Package installs are updated through OpenCode's plugin service.
+- **Update history** records successful updates and rollbacks in `extensions-manager-updates.json` in the global config folder (newest 20 entries). An update entry can be rolled back only on a clean official `main` checkout when the commit still exists locally and is an ancestor of `HEAD`; the checkout is reset, dependencies and the GUI are rebuilt, and failures are reported without hiding the new state.
 - Local changes, a different branch, a non-official remote, or a divergent history block automatic updates instead of overwriting work.
 - Restart OpenCode after the update so the server half and the GUI use the same version.
 

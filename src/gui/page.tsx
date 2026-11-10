@@ -9,6 +9,7 @@ import { McpSection, type McpStatusMap } from "./mcp"
 import { MarketplacesSection } from "./marketplaces"
 import { PluginsSection } from "./plugins"
 import { SkillsSection } from "./skills"
+import { autoCheckSelfUpdate, selfUpdateAvailable } from "./self-update-state"
 import { UpdatesSection } from "./updates"
 
 type Tab = "overview" | "mcp" | "plugins" | "skills" | "marketplaces" | "about"
@@ -145,7 +146,9 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
       id: "about",
       label: ctx.t("tabs.about"),
       icon: "info",
-      ...(diagnostics().length > 0 ? { count: diagnostics().length, warning: true } : {}),
+      ...(diagnostics().length + (selfUpdateAvailable() ? 1 : 0) > 0
+        ? { count: diagnostics().length + (selfUpdateAvailable() ? 1 : 0), warning: true }
+        : {}),
     },
   ]
 
@@ -174,6 +177,7 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
 
   onMount(() => {
     void refresh()
+    void autoCheckSelfUpdate(ctx)
   })
 
   return (
