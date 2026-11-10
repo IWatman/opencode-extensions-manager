@@ -106,6 +106,7 @@ export function McpSection(props: {
         scope={props.scope}
         project={props.project}
         {...(entry ? { entry } : {})}
+        names={entries().map((item) => item.name)}
         onClose={dialog.close}
         onSaved={(next, name) => {
           props.saved(next, ctx.t("mcp.saved", { name }))
@@ -454,6 +455,7 @@ function McpDialog(props: {
   scope: Scope
   project: string | undefined
   entry?: McpEntry
+  names: readonly string[]
   onClose: () => void
   onSaved: (next: ManagerState, name: string) => void
 }) {
@@ -617,17 +619,25 @@ function McpDialog(props: {
   const save = async () => {
     setError(undefined)
     try {
+      const trimmed = name().trim()
+      if (
+        trimmed &&
+        props.names.some((existing) => existing !== props.entry?.name && existing === trimmed)
+      ) {
+        setError(ctx.t("common.alreadyExists", { name: trimmed }))
+        return
+      }
       const next = buildConfig()
 
       setSaving(true)
       const state = await ctx.client.rpc(ManagerRpc).saveMcp({
         scope: props.scope,
         ...target(),
-        name: name().trim(),
+        name: trimmed,
         ...(props.entry ? { originalName: props.entry.name } : {}),
         config: next,
       })
-      props.onSaved(state, name().trim())
+      props.onSaved(state, trimmed)
     } catch (saveError) {
       setError(errorText(saveError))
     } finally {

@@ -94,6 +94,7 @@ export function SkillsSection(props: {
         scope={props.scope}
         project={props.project}
         {...(entry ? { entry } : {})}
+        ids={entries().map((item) => item.id)}
         onClose={dialog.close}
         onSaved={(next, name) => {
           props.saved(next, ctx.t("skills.saved", { name }))
@@ -362,6 +363,7 @@ function SkillDialog(props: {
   scope: Scope
   project: string | undefined
   entry?: SkillEntry
+  ids: readonly string[]
   onClose: () => void
   onSaved: (next: ManagerState, name: string) => void
 }) {
@@ -377,15 +379,20 @@ function SkillDialog(props: {
     setError(undefined)
     try {
       if (!hasFrontmatter(content())) throw new Error(ctx.t("skills.frontmatter"))
+      const nextId = id().trim()
+      if (nextId && props.ids.some((existing) => existing !== props.entry?.id && existing === nextId)) {
+        setError(ctx.t("common.alreadyExists", { name: nextId }))
+        return
+      }
       setSaving(true)
       const state = await ctx.client.rpc(ManagerRpc).saveSkill({
         scope: props.scope,
         ...target(),
-        id: id().trim(),
+        id: nextId,
         ...(props.entry ? { originalId: props.entry.id } : {}),
         content: content(),
       })
-      props.onSaved(state, id().trim())
+      props.onSaved(state, nextId)
     } catch (saveError) {
       setError(errorText(saveError))
     } finally {

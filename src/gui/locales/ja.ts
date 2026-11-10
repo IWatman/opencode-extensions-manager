@@ -21,6 +21,7 @@ export const ja: Record<string, string> = {
   "common.unknown": "不明",
   "common.loading": "読み込み中…",
   "common.none": "まだ何もありません。",
+  "common.alreadyExists": "{{name}} という名前の項目はすでに存在します。",
   "common.showInFolder": "フォルダーで表示",
   "common.copyPath": "パスをコピー",
   "common.invalidLines": "次の行を確認してください: {{lines}}",

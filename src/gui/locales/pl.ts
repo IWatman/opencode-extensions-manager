@@ -20,6 +20,7 @@ export const pl: Record<string, string> = {
   "common.unknown": "Nieznane",
   "common.loading": "Ładowanie…",
   "common.none": "Nic tu jeszcze nie ma.",
+  "common.alreadyExists": "Wpis o nazwie {{name}} już istnieje.",
   "common.showInFolder": "Pokaż w folderze",
   "common.copyPath": "Kopiuj ścieżkę",
   "common.invalidLines": "Sprawdź te wiersze: {{lines}}",

@@ -20,6 +20,7 @@ export const uk: Record<string, string> = {
   "common.unknown": "Невідомо",
   "common.loading": "Завантаження…",
   "common.none": "Тут поки нічого немає.",
+  "common.alreadyExists": "Запис із назвою {{name}} вже існує.",
   "common.showInFolder": "Показати в теці",
   "common.copyPath": "Копіювати шлях",
   "common.invalidLines": "Перевірте ці рядки: {{lines}}",

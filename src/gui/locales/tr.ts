@@ -20,6 +20,7 @@ export const tr: Record<string, string> = {
   "common.unknown": "Bilinmiyor",
   "common.loading": "Yükleniyor…",
   "common.none": "Burada henüz bir şey yok.",
+  "common.alreadyExists": "{{name}} adlı bir kayıt zaten var.",
   "common.showInFolder": "Klasörde göster",
   "common.copyPath": "Yolu kopyala",
   "common.invalidLines": "Şu satırları kontrol edin: {{lines}}",

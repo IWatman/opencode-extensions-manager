@@ -20,6 +20,7 @@ export const it: Record<string, string> = {
   "common.unknown": "Sconosciuto",
   "common.loading": "Caricamento…",
   "common.none": "Non c'è ancora nulla.",
+  "common.alreadyExists": "Esiste già una voce con il nome {{name}}.",
   "common.showInFolder": "Mostra nella cartella",
   "common.copyPath": "Copia percorso",
   "common.invalidLines": "Controlla queste righe: {{lines}}",
