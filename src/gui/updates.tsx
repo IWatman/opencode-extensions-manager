@@ -85,6 +85,10 @@ export function UpdatesSection(props: {
 
       if (marketResult.status === "fulfilled") {
         setMarketplace(marketResult.value.plugins.filter((item) => item.updateAvailable))
+        for (const item of marketResult.value.plugins) {
+          if (item.status !== "error" && item.status !== "skipped") continue
+          errors.push(`${item.displayName ?? item.plugin}: ${item.error ?? item.status}`)
+        }
       } else {
         errors.push(`Marketplaces: ${errorText(marketResult.reason)}`)
       }
@@ -103,6 +107,7 @@ export function UpdatesSection(props: {
             scope: "global",
           }),
         )
+        if (globalClaude.value.error) errors.push(`Claude Code: ${globalClaude.value.error}`)
       } else {
         errors.push(`Claude Code: ${errorText(globalClaude.reason)}`)
       }
@@ -113,6 +118,7 @@ export function UpdatesSection(props: {
             project: projectPath,
           }),
         )
+        if (projectClaude.value.error) errors.push(`Claude Code (project): ${projectClaude.value.error}`)
       } else if (projectClaude.status === "rejected") {
         errors.push(`Claude Code (project): ${errorText(projectClaude.reason)}`)
       }
