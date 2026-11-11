@@ -53,7 +53,14 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal<string>()
   const [scope, setScope] = createSignal<Scope>("global")
-  const [project, setProject] = createSignal<string | undefined>(ctx.sessions.current()?.location?.directory)
+  // The text field is a draft. Operations always use the committed project, so typing a new path
+  // cannot send an install or delete into a project whose state has not been loaded yet.
+  const [projectDraft, setProjectDraft] = createSignal<string | undefined>(
+    ctx.sessions.current()?.location?.directory,
+  )
+  const [project, setProject] = createSignal<string | undefined>(
+    ctx.sessions.current()?.location?.directory,
+  )
   const [busy, setBusy] = createSignal<string>()
   const [statuses, setStatuses] = createSignal<Record<Scope, McpStatusMap>>({ global: {}, project: {} })
   const [tab, setTab] = createSignal<Tab>(tabFromTarget(props.target))
@@ -97,20 +104,23 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
 
   const refresh = async () => {
     const current = ++generation
+    const requested = projectDraft()?.trim()
     setLoading(true)
     try {
-      const path = project()?.trim()
-      const next = await ctx.client.rpc(ManagerRpc).state(path ? { project: path } : {})
+      const next = await ctx.client.rpc(ManagerRpc).state(requested ? { project: requested } : {})
       if (current !== generation) return
+      const committed = next.project?.root ?? (requested || undefined)
       setState(next)
       setError(undefined)
-      if (!project() && next.project) setProject(next.project.root)
+      setProject(committed)
+      // Do not overwrite text the user typed while the request was running.
+      if ((projectDraft()?.trim() ?? "") === (requested ?? "")) setProjectDraft(committed)
+      void loadStatuses()
     } catch (refreshError) {
       if (current === generation) setError(errorText(refreshError))
     } finally {
       if (current === generation) setLoading(false)
     }
-    void loadStatuses()
   }
 
   const saved = (next: ManagerState, message: string) => {
@@ -264,7 +274,7 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
       const picked = (await ctx.desktop?.pick({ directory: true, title: ctx.t("scope.pickFolder") })) ?? []
       const [folder] = picked
       if (!folder) return
-      setProject(folder)
+      setProjectDraft(folder)
       setScope("project")
       await refresh()
     } catch (pickError) {
@@ -373,8 +383,8 @@ export function ExtensionsPage(props: { ctx: GuiContext; target?: string }) {
               <Show when={scope() === "project"}>
                 <div class="oem-toolbar-item oem-toolbar-grow">
                   <ctx.ui.TextInput
-                    value={project() ?? ""}
-                    onInput={setProject}
+                    value={projectDraft() ?? ""}
+                    onInput={setProjectDraft}
                     onSubmit={() => void refresh()}
                     label={ctx.t("scope.projectDir")}
                     placeholder="C:\path\to\project"

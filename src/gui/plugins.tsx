@@ -24,8 +24,30 @@ function isLocalTarget(target: string) {
   )
 }
 
+/** Stable JSON so an option reorder does not change the selection key. */
+function stableOptions(value: unknown): string {
+  if (value === undefined) return ""
+  const normalize = (input: unknown): unknown => {
+    if (Array.isArray(input)) return input.map(normalize)
+    if (input && typeof input === "object") {
+      return Object.fromEntries(
+        Object.entries(input as Record<string, unknown>)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, item]) => [key, normalize(item)]),
+      )
+    }
+    return input
+  }
+  try {
+    return JSON.stringify(normalize(value))
+  } catch {
+    return String(value)
+  }
+}
+
 function pluginKey(entry: PluginEntry) {
-  return `${entry.scope}:${entry.index}`
+  // The index shifts when another entry is removed, so it cannot identify a selection safely.
+  return `${entry.scope}:${entry.removal ? "removal" : "plugin"}:${entry.package}:${stableOptions(entry.options)}`
 }
 
 export function PluginsSection(props: {

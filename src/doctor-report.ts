@@ -33,15 +33,46 @@ function rows(value: unknown): Record<string, unknown>[] {
 /** Keeps credentials out of a report the user may share. */
 function redact(text: string) {
   return text.replace(
-    /\b(token|api[_-]?key|secret|password|authorization)\b(\s*[=:]\s*)([^\s&]+)/gi,
+    /\b(token|api[_-]?key|secret|password|authorization)\b([ \t]*[=:][ \t]*)(?:(?:bearer|basic)[ \t]+)?[^\s&]+/gi,
     (_match, name: string, separator: string) => `${name}${separator}***`,
+  )
+}
+
+/** Masks `user:password@` and token-only userinfo in URLs embedded in paths or diagnostics. */
+function redactUrlCredentials(text: string) {
+  return text.replace(
+    /\b([a-z][a-z0-9+.-]*:\/\/)([^/\s@]+)@/gi,
+    (_match, scheme: string) => `${scheme}***@`,
+  )
+}
+
+function redactSecrets(text: string) {
+  return redact(redactFlags(redactUrlCredentials(text)))
+}
+
+/** Masks `--token VALUE` and `-password VALUE` forms that appear in commands and diagnostics. */
+function redactFlags(text: string) {
+  return text.replace(
+    /(?<![\w-])(--?(?:token|api[_-]?key|secret|password|authorization|auth))\b([ \t]+)(?:(?:bearer|basic)[ \t]+)?(?:"[^"]*"|'[^']*'|\S+)/gi,
+    (_match, name: string, separator: string) => `${name}${separator}***`,
+  )
+}
+
+function redactCommand(command: unknown) {
+  if (!Array.isArray(command)) return "no command"
+  const secretFlag = /^(?:--)?(?:token|api[_-]?key|secret|password|authorization)$/i
+  return redact(
+    command
+      .filter((part): part is string => typeof part === "string")
+      .map((part, index, parts) => (index > 0 && secretFlag.test(parts[index - 1] ?? "") ? "***" : part))
+      .join(" "),
   )
 }
 
 function mcpSummary(config: unknown) {
   if (!isRecord(config)) return "invalid"
   if (config.type === "local") {
-    return redact(Array.isArray(config.command) ? config.command.filter((part) => typeof part === "string").join(" ") : "no command")
+    return redactCommand(config.command)
   }
   if (config.type === "remote") return redact(typeof config.url === "string" ? config.url : "no URL")
   return "invalid"
@@ -77,7 +108,7 @@ export async function writeDoctorReport(input: DoctorReportInput): Promise<strin
 
   const backups = await listConfigBackups(input.scope, input.project).catch(() => [])
 
-  const markdown = [
+  const markdown = redactSecrets([
     "# Extensions Manager — Doctor report",
     "",
     `- Generated: ${now.toISOString()}`,
@@ -201,7 +232,7 @@ export async function writeDoctorReport(input: DoctorReportInput): Promise<strin
     "- Environment variables, headers, and secrets are not included; MCP summaries redact common credential fields.",
     "- This report is read-only. Doctor did not change the configuration while creating it.",
     "",
-  ].join("\n")
+  ].join("\n"))
 
   const directory = doctorReportDir()
   await mkdir(directory, { recursive: true })

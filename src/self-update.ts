@@ -557,10 +557,9 @@ export async function checkSelfUpdate(
       ...(reason ? { reason } : {}),
     }
   } catch (error) {
-    return {
-      ...base,
-      reason: message(error),
-    }
+    // A failed fetch means the answer is unknown, not that the checkout is current. The GUI keeps
+    // the last successful check visible and reports this error separately.
+    throw new Error(`Cannot check for updates: ${message(error)}`)
   }
 }
 

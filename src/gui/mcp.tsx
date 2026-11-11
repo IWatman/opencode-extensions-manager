@@ -711,6 +711,8 @@ function McpDialog(props: {
   const [preview, setPreview] = createSignal<ConfigPreview>()
   const [error, setError] = createSignal<string>()
 
+  let previewGeneration = 0
+
   const target = () => (props.project?.trim() ? { project: props.project.trim() } : {})
 
   // A preview describes the values at the moment it was requested; hide it as soon as any field
@@ -731,6 +733,9 @@ function McpDialog(props: {
     oauthRedirectUri()
     oauthMetadataUrl()
     disabled()
+    // Invalidate an in-flight preview too, otherwise its response would restore the old diff.
+    previewGeneration += 1
+    setPreviewing(false)
     setPreview(undefined)
   })
 
@@ -805,6 +810,7 @@ function McpDialog(props: {
 
   const showPreview = async () => {
     setError(undefined)
+    const generation = ++previewGeneration
     try {
       const next = buildConfig()
       setPreviewing(true)
@@ -815,12 +821,14 @@ function McpDialog(props: {
         ...(props.entry ? { originalName: props.entry.name } : {}),
         config: next,
       })
+      if (generation !== previewGeneration) return
       setPreview(result)
     } catch (previewError) {
+      if (generation !== previewGeneration) return
       setPreview(undefined)
       setError(errorText(previewError))
     } finally {
-      setPreviewing(false)
+      if (generation === previewGeneration) setPreviewing(false)
     }
   }
 

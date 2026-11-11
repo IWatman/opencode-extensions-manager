@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -267,12 +267,20 @@ export async function readRegistry(): Promise<{ registry: Registry; error?: stri
 }
 
 export async function writeRegistry(registry: Registry) {
+  const file = registryPath()
+  if (await isFile(file)) {
+    try {
+      JSON.parse(await readFile(file, "utf8"))
+    } catch (error) {
+      throw new Error(`Cannot modify registry until it is repaired: ${file}: ${message(error)}`)
+    }
+  }
   const next: Registry = {
     version: 1,
     marketplaces: registry.marketplaces,
     installed: registry.installed,
   }
-  await writeAtomic(registryPath(), `${JSON.stringify(next, null, 2)}\n`, true)
+  await writeAtomic(file, `${JSON.stringify(next, null, 2)}\n`, true)
 }
 
 export function marketplaceRecords(registry: Registry): MarketplaceRecord[] {
@@ -830,6 +838,8 @@ interface PluginFiles {
   readonly location: PluginLocation
   readonly paths: readonly string[]
   readonly text: ReadonlyMap<string, string>
+  readonly resources?: ReadonlyMap<string, Uint8Array>
+  readonly executable?: ReadonlySet<string>
 }
 
 function isTextFile(value: string) {
@@ -839,19 +849,21 @@ function isTextFile(value: string) {
 async function readLocalPluginFiles(location: PluginLocation, root: string): Promise<PluginFiles> {
   const paths: string[] = []
   const text = new Map<string, string>()
+  const resources = new Map<string, Uint8Array>()
+  const executable = new Set<string>()
+  await assertNoSkillSymlinks(root)
   const queue = [{ dir: root, prefix: "" }]
+  let nodes = 0
   while (queue.length > 0) {
     const item = queue.shift()!
-    let entries
-    try {
-      entries = await readdir(item.dir, { withFileTypes: true })
-    } catch {
-      continue
-    }
+    const entries = await readdir(item.dir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.name === "node_modules" || entry.name === ".git") continue
+      if (++nodes > 10_000) throw new Error("Plugin source exceeds the file limit")
       const relative = item.prefix ? `${item.prefix}/${entry.name}` : entry.name
+      assertSkillResourcePath(relative)
       const full = path.join(item.dir, entry.name)
+      if (entry.isSymbolicLink()) throw new Error(`Symlinks are not supported in plugin sources: ${relative}`)
       if (entry.isDirectory()) {
         queue.push({ dir: full, prefix: relative })
         continue
@@ -859,20 +871,62 @@ async function readLocalPluginFiles(location: PluginLocation, root: string): Pro
       if (!entry.isFile()) continue
       paths.push(relative)
       if (!isTextFile(relative)) continue
-      try {
-        const content = await readFile(full, "utf8")
-        if (content.length <= 1_000_000) text.set(relative, content)
-      } catch {
-        // A binary or unreadable file is not needed for compatibility.
+      const stat = await lstat(full)
+      if (stat.size > 1_000_000) {
+        if (/(^|\/)SKILL\.md$/i.test(relative)) throw new Error(`Skill file is too large: ${relative}`)
+        continue
       }
+      text.set(relative, await readFile(full, "utf8"))
     }
   }
-  return { location, paths, text }
+  let bytes = 0
+  for (const relative of skillResourcePaths(paths)) {
+    const full = path.join(root, ...relative.split("/"))
+    await assertNoSkillSymlinks(full)
+    const stat = await lstat(full)
+    if (!stat.isFile() || stat.size > 16_000_000 || (bytes += stat.size) > 64_000_000) {
+      throw new Error(`Skill resources exceed the size limit: ${relative}`)
+    }
+    resources.set(relative, await readFile(full))
+    if (stat.mode & 0o111) executable.add(relative)
+  }
+  return { location, paths, text, resources, executable }
+}
+
+/** Reject paths that can alias or escape a skill directory on either Windows or POSIX. */
+function assertSkillResourcePath(value: string) {
+  if (!value || value.split("/").some((part) =>
+    !part || part === "." || part === ".." || /[\\\x00-\x1f<>:"|?*]/.test(part) ||
+    /[. ]$/.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part))) {
+    throw new Error(`Unsafe skill resource path: ${value}`)
+  }
+}
+
+async function assertNoSkillSymlinks(target: string) {
+  const resolved = path.resolve(target)
+  const root = path.parse(resolved).root
+  let current = root
+  for (const part of resolved.slice(root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, part)
+    try {
+      if ((await lstat(current)).isSymbolicLink()) throw new Error(`Symlinks are not supported: ${current}`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    }
+  }
+}
+
+function skillResourcePaths(paths: readonly string[]) {
+  const roots = paths.filter((file) => /(^|\/)SKILL\.md$/i.test(file)).map((file) => {
+    const dir = path.posix.dirname(file)
+    return dir === "." ? "" : `${dir}/`
+  })
+  return paths.filter((file) => roots.some((root) => file.startsWith(root)))
 }
 
 function normalizeSkillPath(value: string) {
-  const normalized = value.replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/+$/, "")
-  if (!normalized || normalized.split("/").includes("..")) return undefined
+  const normalized = value.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "")
+  try { assertSkillResourcePath(normalized) } catch { return undefined }
   return normalized
 }
 
@@ -887,6 +941,14 @@ async function fetchGithubPluginFiles(
     .filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix))
     .map((entry) => entry.path.slice(prefix.length))
   const paths = all.filter((entry) => entry.length > 0)
+  for (const file of paths) assertSkillResourcePath(file)
+  if (paths.length > 10_000) throw new Error("Plugin source exceeds the file limit")
+  const resourcePaths = new Set(skillResourcePaths(paths))
+  for (const node of tree) {
+    if (node.path.startsWith(prefix) && (node as TreeEntry & { mode?: string }).mode === "120000") {
+      throw new Error(`Symlinks are not supported in plugin sources: ${node.path}`)
+    }
+  }
   const needed = new Set<string>()
   for (const entryPath of paths) {
     if (
@@ -915,16 +977,47 @@ async function fetchGithubPluginFiles(
   const repo = location.repo!
   const ref = location.ref!
   const text = new Map<string, string>()
-  await mapLimit([...needed], 6, async (entryPath) => {
+  const resources = new Map<string, Uint8Array>()
+  const executable = new Set<string>()
+  let bytes = 0
+  await mapLimit([...new Set([...needed, ...resourcePaths])], 6, async (entryPath) => {
     const fullPath = prefix ? `${prefix}${entryPath}` : entryPath
     const url = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${fullPath
       .split("/")
       .map(encodeURIComponent)
       .join("/")}`
-    const result = await fetchText(url)
-    if (result.ok && result.text !== undefined && result.text.length <= 1_000_000) text.set(entryPath, result.text)
+    const response = await fetch(url, {
+      headers: { "user-agent": "opencode-extensions-manager" },
+      signal: AbortSignal.timeout(12_000),
+    })
+    if (!response.ok) throw new Error(`Failed to load required plugin file ${entryPath}: ${response.status}`)
+    const chunks: Uint8Array[] = []
+    let size = 0
+    const reader = response.body?.getReader()
+    if (reader) {
+      try {
+        for (;;) {
+          const chunk = await reader.read()
+          if (chunk.done) break
+          size += chunk.value.length
+          bytes += chunk.value.length
+          if (size > 16_000_000 || bytes > 64_000_000) throw new Error(`Skill resources exceed the size limit: ${entryPath}`)
+          chunks.push(chunk.value)
+        }
+      } finally {
+        await reader.cancel()
+      }
+    }
+    const content = Buffer.concat(chunks)
+    if (needed.has(entryPath)) {
+      if (content.length > 1_000_000) throw new Error(`Required plugin file is too large: ${entryPath}`)
+      text.set(entryPath, content.toString("utf8"))
+    }
+    if (resourcePaths.has(entryPath)) resources.set(entryPath, content)
+    const node = tree.find((item) => item.path === fullPath) as (TreeEntry & { mode?: string }) | undefined
+    if (node?.mode === "100755") executable.add(entryPath)
   })
-  return { location, paths, text }
+  return { location, paths, text, resources, executable }
 }
 
 async function pluginFiles(location: PluginLocation, force = false, entry?: MarketplacePluginRaw): Promise<PluginFiles> {
@@ -946,6 +1039,7 @@ export interface SkillSource {
   readonly name: string
   readonly description?: string
   readonly content: string
+  readonly resources?: readonly { readonly path: string; readonly content: Uint8Array; readonly executable?: boolean }[]
 }
 
 export interface SkillCandidate extends SkillSource {
@@ -1123,11 +1217,21 @@ function extractSkills(
   const add = (file: string, id: string, mode: "strict" | "silent") => {
     const content = files.text.get(file)
     if (!content) return
+    const directory = path.posix.dirname(file)
+    const prefix = directory === "." ? "" : `${directory}/`
+    const resources = /(^|\/)SKILL\.md$/i.test(file)
+      ? [...(files.resources ?? [])].flatMap(([name, content]) => {
+          if (name === file || !name.startsWith(prefix)) return []
+          const relative = name.slice(prefix.length)
+          assertSkillResourcePath(relative)
+          return [{ path: relative, content, ...(files.executable?.has(name) ? { executable: true } : {}) }]
+        })
+      : []
     const skill = skillFromContent(id, content)
     if (skill) {
       if (seen.has(skill.id)) return
       seen.add(skill.id)
-      skills.push(skill)
+      skills.push({ ...skill, resources })
       return
     }
     if (mode === "silent") return
@@ -1139,6 +1243,7 @@ function extractSkills(
         name: id,
         description: firstDescription(body, id),
         content,
+        resources,
         reason: `No valid YAML frontmatter: ${file}`,
       })
     }
@@ -1218,7 +1323,7 @@ function extract(entry: MarketplacePluginRaw, files: PluginFiles): Extracted {
   const warnings: string[] = []
   const mcp: { name: string; config: Record<string, unknown> }[] = []
   const mcpFile = readJsonText(files, ".mcp.json")
-  const fromFile = isRecord(mcpFile) && isRecord(mcpFile.mcpServers) ? mcpServersFrom(mcpFile.mcpServers) : []
+  const fromFile = isRecord(mcpFile) ? mcpServersFrom(mcpFile) : []
   const fromEntry = entry.mcpServers !== undefined ? mcpServersFrom(entry.mcpServers) : []
   for (const server of [...fromFile, ...fromEntry]) {
     if (mcp.some((item) => item.name === server.name)) continue
@@ -1390,6 +1495,76 @@ function hashArtifact(value: unknown) {
   return createHash("sha256").update(stableSerialization(value)).digest("hex")
 }
 
+interface SkillTreeEntry {
+  readonly path: string
+  readonly hash: string
+}
+
+/**
+ * Every file inside a skill folder is part of the installed artifact. Hashing the whole tree lets
+ * the manager keep user notes and scripts instead of deleting the folder on update or uninstall.
+ */
+async function readSkillTree(directory: string): Promise<SkillTreeEntry[]> {
+  const info = await lstat(directory)
+  if (!info.isDirectory()) {
+    return [
+      {
+        path: path.basename(directory),
+        hash: createHash("sha256").update(await readFile(directory)).digest("hex"),
+      },
+    ]
+  }
+  const entries: SkillTreeEntry[] = []
+  const walk = async (current: string, prefix: string) => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name
+      const full = path.join(current, entry.name)
+      if (entry.isSymbolicLink()) throw new Error(`Symlinks are not supported in skills: ${relative}`)
+      if (entry.isDirectory()) {
+        await walk(full, relative)
+        continue
+      }
+      if (!entry.isFile()) continue
+      entries.push({
+        path: relative,
+        hash: createHash("sha256").update(await readFile(full)).digest("hex"),
+      })
+    }
+  }
+  await walk(directory, "")
+  return entries.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+}
+
+interface SkillArtifact {
+  readonly kind: "dir" | "file"
+  readonly dir: string
+  readonly content: string
+}
+
+function hashSkillContent(skill: { readonly content: string }) {
+  return hashArtifact(skill.content)
+}
+
+async function hashSkillArtifact(skill: SkillArtifact) {
+  if (skill.kind === "file") return hashSkillContent(skill)
+  return hashArtifact(await readSkillTree(skill.dir))
+}
+
+/**
+ * `expected` predates tree fingerprints when it only matches SKILL.md; accept it as long as the
+ * folder contains nothing else, so existing installations stay owned after the upgrade.
+ */
+async function skillArtifactOwned(expected: string, skill: SkillArtifact) {
+  if (skill.kind === "file") return expected === hashSkillContent(skill)
+  const tree = await readSkillTree(skill.dir)
+  if (expected === hashArtifact(tree)) return true
+  return (
+    tree.length === 1 &&
+    tree[0]!.path.toLowerCase() === "skill.md" &&
+    expected === hashSkillContent(skill)
+  )
+}
+
 /**
  * `disabled` is toggled by this manager and is not part of the artifact the user can edit, so it
  * must not invalidate the fingerprint when a plugin is disabled and enabled again.
@@ -1416,7 +1591,7 @@ async function captureFingerprints(paths: ScopePaths, applied: AppliedArtifacts)
   }
   for (const id of applied.skills) {
     const skill = skills.find((item) => item.id === id)
-    if (skill) skillHashes[id] = hashArtifact(skill.content)
+    if (skill) skillHashes[id] = await hashSkillArtifact(skill)
   }
   for (const target of applied.plugins) {
     // A disabled plugin entry is not written to the config, but re-enabling it restores this value.
@@ -1539,7 +1714,7 @@ async function removeArtifacts(
       await removeSkill(paths, id)
       continue
     }
-    if (hashArtifact(skill.content) !== expected) {
+    if (!(await skillArtifactOwned(expected, skill))) {
       skipped.push(`Skill "${id}"`)
       continue
     }
@@ -1596,6 +1771,19 @@ async function removeSkillNode(paths: ScopePaths, id: string) {
     await rm(path.join(root, id), { recursive: true, force: true })
     await rm(path.join(root, `${id}.md`), { force: true })
   }
+}
+
+async function skillNodeExists(paths: ScopePaths, id: string) {
+  for (const root of [paths.skillsDir, path.join(paths.skillsDir, ".disabled")]) {
+    if (
+      (await isDirectory(path.join(root, id))) ||
+      (await isFile(path.join(root, id))) ||
+      (await isFile(path.join(root, `${id}.md`)))
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -1655,6 +1843,49 @@ async function restoreInstallSnapshot(paths: ScopePaths, snapshot: InstallSnapsh
   if (failures.length > 0) throw new Error(`Rollback failed: ${failures.join("; ")}`)
 }
 
+/** Writes the files bundled next to SKILL.md, keeping executable bits where the source had them. */
+async function writeSkillResources(
+  paths: ScopePaths,
+  id: string,
+  resources: SkillSource["resources"],
+) {
+  if (!resources || resources.length === 0) return
+  const skills = await listSkills(paths.skillsDir)
+  const skill = skills.find((item) => item.id === id)
+  if (!skill || skill.kind !== "dir") return
+  const root = path.resolve(skill.dir)
+  for (const resource of resources) {
+    const relative = resource.path.replaceAll("\\", "/").replace(/^\.\//, "")
+    assertSkillResourcePath(relative)
+    // saveSkill owns SKILL.md; a case-only variant would overwrite it on Windows.
+    if (relative.split("/")[0]!.toLowerCase() === "skill.md") continue
+    const destination = path.join(skill.dir, ...relative.split("/"))
+    if (!path.resolve(destination).startsWith(`${root}${path.sep}`)) {
+      throw new Error(`Unsafe skill resource path: ${resource.path}`)
+    }
+    await mkdir(path.dirname(destination), { recursive: true })
+    const mode = resource.executable ? 0o755 : 0o644
+    await writeFile(destination, resource.content, { mode })
+    if (resource.executable && process.platform !== "win32") await chmod(destination, mode)
+  }
+}
+
+/**
+ * Cleans up a skill node only when this install created it. A pre-existing folder without
+ * SKILL.md, or one with different content, is never removed.
+ */
+async function cleanupFailedSkill(paths: ScopePaths, id: string, content: string) {
+  const skill = (await listSkills(paths.skillsDir).catch(() => [])).find((item) => item.id === id)
+  if (skill) {
+    if (skill.content === content) await removeSkillNode(paths, id)
+    return
+  }
+  // saveSkill can stop after mkdir but before SKILL.md exists. Only an empty folder is ours.
+  const directory = path.join(paths.skillsDir, id)
+  const entries = await readdir(directory).catch(() => undefined)
+  if (entries && entries.length === 0) await rm(directory, { recursive: true, force: true })
+}
+
 async function applyArtifacts(
   paths: ScopePaths,
   extracted: Extracted,
@@ -1683,16 +1914,21 @@ async function applyArtifacts(
   try {
     for (const skill of extracted.skills) {
       const base = slug(`${pluginSlug}__${skill.id}`)
-      const id = uniqueName(base, taken.skills)
+      let id = uniqueName(base, taken.skills)
+      while (await skillNodeExists(paths, id)) {
+        taken.skills.add(id)
+        id = uniqueName(base, taken.skills)
+      }
       taken.skills.add(id)
       try {
         await saveSkill(paths, { id, content: skill.content })
+        await writeSkillResources(paths, id, skill.resources)
         if (!enabled) await setSkillEnabled(paths, id, false)
         skillIDs.push(id)
       } catch (error) {
         // saveSkill can fail after creating the folder but before writing SKILL.md; that partial
-        // folder is not discoverable by removeSkill, so clean both possible shapes directly.
-        await removeSkillNode(paths, id).catch(() => undefined)
+        // folder is not discoverable by removeSkill, so clean only the node this call created.
+        await cleanupFailedSkill(paths, id, skill.content).catch(() => undefined)
         throw error
       }
     }
@@ -1742,7 +1978,9 @@ interface ExtractedInstallRequest {
  * marketplace install. Used both by marketplace installs and by Claude Code cache imports.
  */
 async function installExtracted(request: ExtractedInstallRequest): Promise<{ key: string; skipped: string[] }> {
-  const registry = request.registry ?? (await readRegistry()).registry
+  const currentRegistry = await readRegistry()
+  if (currentRegistry.error) throw new Error(`Cannot modify registry until it is repaired: ${currentRegistry.error}`)
+  const registry = request.registry ?? currentRegistry.registry
   // Scope is part of the key, so installing the same plugin globally and in a project produces two
   // independent records and two independent artifact sets.
   const effectivePaths = await resolveScope(request.scope, request.project)
@@ -1943,7 +2181,7 @@ export async function setMarketplacePluginEnabled(key: string, enabled: boolean)
         skipped.push(`Skill "${id}" (no fingerprint)`)
         continue
       }
-      if (hashArtifact(skill.content) !== expected) {
+      if (!(await skillArtifactOwned(expected, skill))) {
         skipped.push(`Skill "${id}"`)
         continue
       }
@@ -2417,7 +2655,7 @@ function configsFromText(text: string): unknown[] {
 /** Rewrites a documented CLI command to npx when the repository publishes that CLI to npm. */
 function runnableMcpConfig(
   config: Record<string, unknown>,
-  manifest: Record<string, unknown>,
+  manifests: readonly Record<string, unknown>[],
 ): { config: Record<string, unknown>; viaNpx: boolean } {
   const command = Array.isArray(config.command)
     ? config.command.filter((item): item is string => typeof item === "string" && item.length > 0)
@@ -2426,12 +2664,16 @@ function runnableMcpConfig(
   if (!executable || executable.includes("/") || executable.includes("\\") || executable.startsWith(".")) {
     return { config, viaNpx: false }
   }
-  const name = typeof manifest.name === "string" ? manifest.name : undefined
-  if (!name || manifest.private === true) return { config, viaNpx: false }
-  const bin = manifest.bin
-  const bins = isRecord(bin) ? Object.keys(bin) : typeof bin === "string" ? [name.split("/").pop() ?? name] : []
-  if (executable !== name && !bins.includes(executable)) return { config, viaNpx: false }
-  return { config: { ...config, command: ["npx", "-y", name, ...command.slice(1)] }, viaNpx: true }
+  for (const manifest of manifests) {
+    const name = typeof manifest.name === "string" ? manifest.name : undefined
+    if (!name || manifest.private === true) continue
+    const bin = manifest.bin
+    const bins = isRecord(bin) ? Object.keys(bin) : typeof bin === "string" ? [name.split("/").pop() ?? name] : []
+    if (executable !== name && !bins.includes(executable)) continue
+    const npx = executable === name ? ["npx", "-y", name] : ["npx", "-y", `--package=${name}`, executable]
+    return { config: { ...config, command: [...npx, ...command.slice(1)] }, viaNpx: true }
+  }
+  return { config, viaNpx: false }
 }
 
 export async function inspectRepository(url: string): Promise<RepositoryInspection> {
@@ -2442,7 +2684,7 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
   )
   const folder = location.subpath.replace(/^\/+|\/+$/g, "")
   let ref = refs[0] ?? "main"
-  let packageJson: unknown
+  let packageJson: Record<string, unknown>[] = []
   let readme: string | undefined
   let configs: { file: string; value: unknown }[] = []
   for (const candidate of refs) {
@@ -2464,7 +2706,7 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
       ref = candidate
       packageJson = manifestResults
         .map((result) => (result.ok ? parseConfigText(result.text) : undefined))
-        .find((value) => value !== undefined)
+        .filter((value): value is Record<string, unknown> => isRecord(value))
       readme = readmeResult.ok ? readmeResult.text : undefined
       configs = configResults.flatMap((result, index) =>
         result.ok ? [{ file: repositoryMcpFiles[index]!, value: parseConfigText(result.text) }] : [],
@@ -2473,7 +2715,7 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     }
   }
 
-  const manifest = isRecord(packageJson) ? packageJson : {}
+  const manifests = packageJson
   const proposals: RepositoryProposal[] = []
   const notes: string[] = []
   const addMcp = (name: string, config: Record<string, unknown>, reason: string) => {
@@ -2496,7 +2738,7 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
       const parsed = proposalsFromConfig(value, "MCP server found in README")
       for (const proposal of parsed.proposals) {
         if (!proposal.name || !isRecord(proposal.config)) continue
-        const runnable = runnableMcpConfig(proposal.config, manifest)
+        const runnable = runnableMcpConfig(proposal.config, manifests)
         addMcp(
           proposal.name,
           runnable.config,
@@ -2511,11 +2753,12 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
     }
   }
 
-  const mcpUrl = readme?.match(/https?:\/\/[^\s"'<>)]+\/mcp(?:\?[^\s"'<>)]*)?/i)?.[0]
-  if (mcpUrl) {
-    addMcp(location.repo, { type: "remote", url: mcpUrl }, "MCP server URL found in README")
+  if (readme) {
+    const scanned = scanMcpText(readme)
+    addScannedProposals(proposals, { ...scanned, packages: [] }, notes)
   }
 
+  const manifest = manifests.find((value) => value.private !== true) ?? manifests[0] ?? {}
   const packageName = typeof manifest.name === "string" ? manifest.name : undefined
   const keywords = Array.isArray(manifest.keywords)
     ? manifest.keywords.filter((value): value is string => typeof value === "string")
@@ -2528,7 +2771,7 @@ export async function inspectRepository(url: string): Promise<RepositoryInspecti
       item.kind === "mcp" &&
       isRecord(item.config) &&
       Array.isArray(item.config.command) &&
-      item.config.command.includes(packageName),
+      item.config.command.some((part) => part === packageName || part === `--package=${packageName}`),
   )
   if (
     packageName &&
@@ -2810,9 +3053,9 @@ function scanMcpText(text: string, base?: URL) {
   const packageSeen = new Set<string>()
   const linkSeen = new Set<string>()
 
-  for (const match of plain.matchAll(/https?:\/\/[^\s"'<>`)\]]+\/mcp(?:\?[^\s"'<>`)\]]*)?/gi)) {
+  for (const match of plain.matchAll(/https?:\/\/[^\s"'<>`)\]]+/gi)) {
     const url = absoluteHttpUrl(match[0], base)
-    if (!url || endpointSeen.has(url)) continue
+    if (!url || !isMcpEndpoint(new URL(url)) || endpointSeen.has(url)) continue
     endpointSeen.add(url)
     endpoints.push(url)
   }
@@ -2843,6 +3086,7 @@ function scanMcpText(text: string, base?: URL) {
 
   return {
     endpoints,
+    configs: configsFromText(plain),
     commands: commandsFromText(plain),
     packages,
     jsonLinks: jsonLinks.slice(0, 4),
@@ -2854,6 +3098,13 @@ function addScannedProposals(
   scanned: ReturnType<typeof scanMcpText>,
   notes: string[],
 ) {
+  for (const config of scanned.configs) {
+    const found = proposalsFromConfig(config, "MCP configuration found in the source")
+    for (const proposal of found.proposals) {
+      if (!proposals.some((item) => item.kind === "mcp" && item.name === proposal.name)) proposals.push(proposal)
+    }
+    if (found.skipped.length) notes.push(`Skipped invalid MCP server configuration: ${found.skipped.join(", ")}.`)
+  }
   for (const endpoint of scanned.endpoints) {
     let url: URL
     try {
@@ -2862,7 +3113,7 @@ function addScannedProposals(
       continue
     }
     const name = remoteMcpName(url)
-    if (proposals.some((proposal) => proposal.kind === "mcp" && proposal.name === name)) continue
+    if (proposals.some((proposal) => proposal.kind === "mcp" && (proposal.name === name || (isRecord(proposal.config) && proposal.config.url === endpoint)))) continue
     proposals.push({
       kind: "mcp",
       name,
@@ -3041,6 +3292,7 @@ async function inspectUrlSource(url: URL) {
 function isMcpEndpoint(url: URL) {
   const pathname = url.pathname.replace(/\/+$/, "").toLowerCase()
   const host = url.hostname.toLowerCase()
+  if (/^(?:docs?|www\.docs?)\./.test(host) || /\/(?:docs?|guides?|setup|getting-started)(?:\/|$)/.test(pathname)) return false
   return (
     /(?:^|\/)mcp(?:\/|$)/.test(pathname) ||
     /(?:^|\/)sse(?:\/|$)/.test(pathname) ||
@@ -3217,6 +3469,10 @@ export async function normalizeInstalledMcpUrls() {
     }
     try {
       const paths = await resolveScope(record.scope, record.project)
+      const before = mcpServers((await readScope(paths)).data)
+      const owned = record.mcp.filter((name) =>
+        before[name] !== undefined && record.fingerprints?.mcp?.[name] === hashArtifact(mcpFingerprintValue(before[name])),
+      )
       if (!(await normalizeMcpUrls(paths, record.mcp))) {
         installed.push(record)
         continue
@@ -3227,7 +3483,7 @@ export async function normalizeInstalledMcpUrls() {
       const document = await readScope(paths)
       const servers = mcpServers(document.data)
       const mcp = { ...record.fingerprints?.mcp }
-      for (const name of record.mcp) {
+      for (const name of owned) {
         const config = servers[name]
         if (config !== undefined) mcp[name] = hashArtifact(mcpFingerprintValue(config))
       }

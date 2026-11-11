@@ -2,7 +2,9 @@
 
 export function quoteArgument(argument: string) {
   if (argument.length > 0 && !/[\s"'\\]/.test(argument)) return argument
-  return JSON.stringify(argument)
+  // Double quotes preserve literal LF/CR/TAB, so a multiline argument round-trips. Only backslash
+  // and the quote itself need escaping, which keeps Windows paths readable.
+  return `"${argument.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
 }
 
 export function formatCommand(arguments_: readonly string[]) {

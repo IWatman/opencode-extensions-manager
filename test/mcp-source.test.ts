@@ -316,3 +316,37 @@ test("inspectMcpSource rejects empty and unsupported sources", async () => {
   await assert.rejects(() => inspectMcpSource("ftp://example.com/mcp"), /Unsupported source/)
   await assert.rejects(() => inspectMcpSource("not a source"), /Unsupported source/)
 })
+
+test("README file and HTML documentation extract embedded JSON configs", async (t) => {
+  const config = JSON.stringify({ mcpServers: { demo: { command: "demo-cli", args: ["mcp"] } } })
+  mockFetch(t, {
+    "https://raw.githubusercontent.com/acme/demo/main/README.md": `# Setup\n\`\`\`json\n${config}\n\`\`\``,
+    "https://docs.example.com/mcp/setup": `<pre><code>${config}</code></pre>`,
+  })
+  for (const source of ["https://github.com/acme/demo/blob/main/README.md", "https://docs.example.com/mcp/setup"]) {
+    const result = await inspectMcpSource(source)
+    assert.equal(result.proposals.length, 1)
+    assert.deepEqual(result.proposals[0]?.config, { type: "local", command: ["demo-cli", "mcp"] })
+  }
+})
+
+test("README preserves full endpoint paths and does not duplicate configured endpoints", async (t) => {
+  const url = "https://api.example.com/mcp/v1?token=placeholder"
+  mockFetch(t, {
+    "https://raw.githubusercontent.com/acme/demo/main/README.md": `# MCP\n\`\`\`json\n${JSON.stringify({ mcpServers: { hosted: { url } } })}\n\`\`\``,
+  })
+  const result = await inspectMcpSource("https://github.com/acme/demo")
+  assert.equal(result.proposals.length, 1)
+  assert.equal(configOf(result.proposals[0]).url, url)
+})
+
+test("README CLI selects its binary from the nested publishable manifest", async (t) => {
+  mockFetch(t, {
+    "https://raw.githubusercontent.com/acme/toolkit/main/README.md": `# MCP\n\`\`\`json\n${JSON.stringify({ mcpServers: { desktop: { command: "desktop-cli", args: ["mcp"] } } })}\n\`\`\``,
+    "https://raw.githubusercontent.com/acme/toolkit/main/package.json": { name: "workspace", private: true },
+    "https://raw.githubusercontent.com/acme/toolkit/main/npm/package.json": { name: "toolkit", bin: { "desktop-cli": "desktop.js", "other-cli": "other.js" } },
+  })
+  const result = await inspectMcpSource("https://github.com/acme/toolkit")
+  assert.equal(result.proposals.length, 1)
+  assert.deepEqual(configOf(result.proposals[0]).command, ["npx", "-y", "--package=toolkit", "desktop-cli", "mcp"])
+})

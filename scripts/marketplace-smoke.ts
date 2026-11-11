@@ -234,9 +234,10 @@ skills = await listSkills(paths.skillsDir)
 assert.equal(skills.length, 2)
 const beforeFailure = registry.registry.installed[0]
 
-// Publishing a new version that fails halfway must leave the working install untouched. An empty
-// directory where the new skill wants to go makes saveSkill fail after the old artifacts were
-// removed; the snapshot has to put the config, skills, and registry back.
+// Publishing a new version that fails at the commit point must leave the working install
+// untouched. The registry write happens after artifacts are applied, so a directory at the
+// registry backup path forces a failure at the last step; the snapshot has to put the config,
+// skills, and registry back.
 const helloBefore = skills.find((skill) => skill.id === "demo__hello")?.content ?? ""
 const configBeforeFailure = await readFile(paths.configPath, "utf8")
 const registryBeforeFailure = await readFile(registryFile, "utf8")
@@ -251,9 +252,11 @@ await writeFile(
 await mkdir(path.join(plugin, "skills", "newblock"), { recursive: true })
 await writeFile(
   path.join(plugin, "skills", "newblock", "SKILL.md"),
-  `---\nname: New block\ndescription: A skill that cannot be installed.\n---\n\nBlocked.\n`,
+  `---\nname: New block\ndescription: A skill installed with version two.\n---\n\nBlocked.\n`,
 )
-await mkdir(path.join(paths.skillsDir, "demo__newblock"), { recursive: true })
+const registryBackup = `${registryFile}.bak`
+await rm(registryBackup, { recursive: true, force: true })
+await mkdir(registryBackup, { recursive: true })
 await assert.rejects(() => updateMarketplacePlugin(installed.key))
 document = await readScope(paths)
 assert.equal(
@@ -270,7 +273,7 @@ assert.equal(registry.registry.installed[0].key, beforeFailure.key)
 assert.deepEqual(registry.registry.installed[0].fingerprints, beforeFailure.fingerprints)
 
 // With the obstacle gone the same update succeeds and replaces both artifacts and fingerprints.
-await rm(path.join(paths.skillsDir, "demo__newblock"), { recursive: true, force: true })
+await rm(registryBackup, { recursive: true, force: true })
 // Bump the published version so the successful update records the revision it replaced.
 await writeFile(
   path.join(plugin, ".claude-plugin", "plugin.json"),

@@ -351,7 +351,19 @@ export function MarketplacesSection(props: {
       ),
     )
   })
-  const visible = createMemo(() => filtered().slice(0, catalogLimit))
+  const focusedKey = () => {
+    const focus = props.focus
+    if (!focus || focus.kind !== "catalog") return undefined
+    return `${focus.marketplace}/${focus.plugin}`
+  }
+  const visible = createMemo(() => {
+    const list = filtered()
+    const key = focusedKey()
+    if (!key) return list.slice(0, catalogLimit)
+    const index = list.findIndex((plugin) => `${plugin.marketplace}/${plugin.name}` === key)
+    // A search result can point past the default limit; render up to it so revealElement can scroll.
+    return list.slice(0, index < 0 ? catalogLimit : Math.max(catalogLimit, index + 1))
+  })
 
   const installedParts = (item: InstalledPlugin) =>
     ctx.t("marketplaces.parts", {
@@ -751,11 +763,11 @@ export function MarketplacesSection(props: {
             }}
           </For>
 
-          <Show when={filtered().length > catalogLimit}>
+          <Show when={filtered().length > visible().length}>
             <ctx.ui.SettingsRow
               title={
                 <span class="oem-muted">
-                  {ctx.t("marketplaces.tooMany", { shown: catalogLimit, total: filtered().length })}
+                  {ctx.t("marketplaces.tooMany", { shown: visible().length, total: filtered().length })}
                 </span>
               }
             />

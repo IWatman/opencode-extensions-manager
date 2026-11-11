@@ -446,6 +446,7 @@ export default Plugin.define({
     }))
 
     await withWriteLock(async () => {
+      await normalizeInstalledMcpUrls()
       try {
         await normalizeMcpUrls(await resolveScope("global"))
       } catch {
@@ -456,7 +457,6 @@ export default Plugin.define({
       } catch {
         // No project or no readable project config.
       }
-      await normalizeInstalledMcpUrls()
     })
   },
 })

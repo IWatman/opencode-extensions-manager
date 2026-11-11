@@ -13,7 +13,9 @@ import {
   readScope,
   resolveScope,
   savePlugin,
+  writeAtomic,
 } from "../src/config.ts"
+import { normalizeRegistry, writeRegistry } from "../src/marketplaces.ts"
 import { tempScope } from "./support/temp-scope.ts"
 
 async function registryIn(t: TestContext, root: string) {
@@ -236,9 +238,32 @@ test("writeDoctorReport writes readable Markdown and redacts credentials", async
         configExists: true,
         skillsDir: scope.paths.skillsDir,
       },
-      diagnostics: [{ scope: "project", message: "example diagnostic" }],
+      diagnostics: [
+        {
+          scope: "project",
+          message:
+            "failed https://user:hunter2@example.com/diag token=abc123 --token DEMO_SECRET Authorization=Bearer topsecret",
+        },
+      ],
+      projectError: "project https://alice:swordfish@example.com/repo",
+      marketplaceError: "marketplace token=feed-secret",
       mcp: [
-        { scope: "project", name: "remote", config: { type: "remote", url: "https://example.com/mcp?api_key=secret" } },
+        {
+          scope: "project",
+          name: "remote",
+          config: {
+            type: "remote",
+            url: "https://user:hunter2@example.com/mcp?api_key=secret",
+          },
+        },
+        {
+          scope: "project",
+          name: "local",
+          config: {
+            type: "local",
+            command: ["demo-server", "--token", "DEMO_SECRET"],
+          },
+        },
       ],
       plugins: [{ scope: "project", index: 0, raw: "opencode-one", package: "opencode-one", removal: false }],
       skills: [],
@@ -251,7 +276,30 @@ test("writeDoctorReport writes readable Markdown and redacts credentials", async
   const text = await readFile(report, "utf8")
   assert.match(text, /# Extensions Manager — Doctor report/)
   assert.match(text, /## Diagnostics/)
-  assert.match(text, /example diagnostic/)
+  assert.match(text, /example diagnostic|failed https:\/\/\*\*\*@example\.com\/diag/)
   assert.match(text, /api_key=\*\*\*/)
   assert.doesNotMatch(text, /api_key=secret/)
+  assert.doesNotMatch(text, /hunter2|swordfish|abc123|feed-secret|topsecret|DEMO_SECRET/)
+  assert.match(text, /Authorization=\*\*\*/)
+  assert.match(text, /https:\/\/\*\*\*@example\.com/)
+})
+
+test("writeAtomic keeps the existing POSIX mode", async (t) => {
+  if (process.platform === "win32") return
+  const scope = await tempScope(t)
+  const file = path.join(scope.root, "mode.json")
+  await writeFile(file, "{}\n", { mode: 0o640 })
+  await writeAtomic(file, '{ "changed": true }\n')
+  assert.equal((await stat(file)).mode & 0o777, 0o640)
+  assert.equal((await stat(`${file}.bak`)).mode & 0o777, 0o640)
+})
+
+test("writeRegistry refuses to overwrite a corrupt registry", async (t) => {
+  const scope = await tempScope(t)
+  const registry = await registryIn(t, scope.root)
+  const broken = "{ this is not json"
+  await writeFile(registry, broken, "utf8")
+
+  await assert.rejects(() => writeRegistry(normalizeRegistry({})), /Cannot modify registry/)
+  assert.equal(await readFile(registry, "utf8"), broken)
 })

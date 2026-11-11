@@ -73,6 +73,10 @@ test("quoteArgument and formatCommand round-trip paths and whitespace", () => {
     "back\\slash",
     'quote"inside',
     "two  spaces",
+    "line one\nline two",
+    "tab\there",
+    "carriage\rreturn",
+    "C:\\Program Files\\node.exe",
   ]
   assert.deepEqual(splitCommand(formatCommand(arguments_)), arguments_)
   assert.equal(quoteArgument("plain"), "plain")

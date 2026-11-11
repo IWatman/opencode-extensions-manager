@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { chmod, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import path from "node:path"
 import { applyEdits, modify, parse, printParseErrorCode, type ParseError } from "jsonc-parser"
@@ -69,9 +69,14 @@ export function globalConfigDir() {
  */
 export async function projectConfigDir(projectRoot: string) {
   let directory = projectRoot
+  const home = path.resolve(homedir())
   for (;;) {
-    const candidate = path.join(directory, ".opencode")
-    if (await isDirectory(candidate)) return candidate
+    // The global config is ~/.config/opencode, so a stray ~/.opencode must not become the project
+    // config for every folder below the home directory. A project rooted at home is still checked.
+    if (path.resolve(directory) !== home || path.resolve(projectRoot) === home) {
+      const candidate = path.join(directory, ".opencode")
+      if (await isDirectory(candidate)) return candidate
+    }
     const parent = path.dirname(directory)
     if (parent === directory) break
     directory = parent
@@ -163,12 +168,17 @@ function applyMutations(text: string, mutations: readonly Mutation[]) {
 /** Writes through a temporary file, keeping the previous contents as `<file>.bak`. */
 export async function writeAtomic(file: string, content: string, backup = true) {
   await mkdir(path.dirname(file), { recursive: true })
-  if (backup && (await isFile(file))) {
+  const exists = await isFile(file)
+  const mode = exists ? (await stat(file)).mode & 0o777 : 0o600
+  if (backup && exists) {
     await copyFile(file, `${file}.bak`)
+    // A backup contains the same secrets as the original, so it needs the same permissions.
+    if (process.platform !== "win32") await chmod(`${file}.bak`, mode)
   }
   const temporary = `${file}.tmp-${process.pid}-${Date.now()}`
-  await writeFile(temporary, content, "utf8")
   try {
+    await writeFile(temporary, content, { encoding: "utf8", mode })
+    await chmod(temporary, mode)
     await rename(temporary, file)
   } catch (error) {
     await rm(temporary, { force: true })

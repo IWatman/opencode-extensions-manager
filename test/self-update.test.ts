@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { execFile } from "node:child_process"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -222,6 +222,12 @@ test("self-update detects a checkout behind origin/main and can fast-forward it"
   assert.equal(stableWithoutTags.updateAvailable, false)
   assert.equal(stableWithoutTags.canUpdate, false)
   assert.match(stableWithoutTags.reason ?? "", /No stable release tags/)
+
+  // An unreachable remote is an error, not "already up to date".
+  const offline = `${remote}.offline`
+  await rename(remote, offline)
+  await assert.rejects(() => checkSelfUpdate(work, "acme/test"), /Cannot check for updates/)
+  await rename(offline, remote)
 
   const historyFile = path.join(root, "updates", "extensions-manager-updates.json")
   const result = await applySelfUpdate(work, "acme/test", "main", historyFile)
